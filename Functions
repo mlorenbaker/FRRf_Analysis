@@ -1,0 +1,377 @@
+## Functions required to load and work with FRRf data
+#### Origional source: Tom Bryce Kelly
+#### Minor (so small) edits by: MLB
+#### https://github.com/tbrycekelly/TheSource
+
+## Functions for analyzing FRRF Output
+##
+## Author: Thomas Bryce Kelly (tkelly@alaska.edu)
+## http://about.tkelly.org/
+##
+## College of Fisheries and Ocean Sciences
+## University of Alaska Fairbanks
+##
+## Dept of Earth, Ocean & Atmospheric Sciences
+## Florida State University
+
+
+
+#' @title Load FRRF Datafiles
+#' @author Thomas Bryce Kelly
+#' @param input.dir the input directory
+#' @param files.names the name of the file in the input directory (default will load all files in that directory)
+#' @export
+load.frrf = function(input.dir, file.names = NULL, verbose = T) {
+    if (is.null(file.names)) {
+        if (verbose) { message('No files provided, attempting to load all files in target directory.')}
+        file.names = list.files(input.dir, pattern = '*.csv')
+    }
+
+    if (verbose) { message('Preparing to load ', length(file.names), ' files.')}
+    result = list()
+
+    for (file.name in file.names) {
+
+        if (verbose) { message('Loading ', paste0(input.dir, file.name), appendLF = F)}
+
+        con = file(paste0(input.dir, file.name), "r")
+
+        col.names = c('Saq', 'E', 'Start', 's', 'Chl', 'ADC', 'rP.obs', 'rP.fit', 'JPII', 'JVPII', 'Fo', 'Fm', 'Fv.Fm',
+                      'C', 'p', 'RSigma', 'Sigma', 'CSQ', 'TauES', 'NPQ', 'NSV', 'QR', 'Qo', 'Qm', 'Qo.SE', 'Qm.SE',
+                      'Q.SE', 'Q.SE.ratio', 'Qo.points', 'Qo.slope', 'Qo.int', 'Qm.points', 'Qm.slope', 'Qm.int')
+
+        data.a = data.frame(Saq = NA, E = NA, Start = NA, s = NA, Chl = NA, ADC = NA,
+                            rP.obs = NA, rP.fit = NA, JPII = NA, JVPII = NA, Fo = NA,
+                            Fm = NA, Fv.Fm = NA, C = NA, p = NA, RSigma = NA, Sigma = NA, CSQ = NA,
+                            TauES = NA, NPQ = NA, NSV = NA, QR = NA, Qo = NA, Qm = NA,
+                            Qo.SE = NA, Qm.SE = NA, Q.SE = NA, Q.SE.ratio = NA, Qo.points = NA,
+                            Qo.slope = NA, Qo.int = NA, Qm.points = NA, Qm.slope = NA, QM.int = NA)
+
+        data.b = data.a
+        data.c = data.a
+        data.d = data.a
+
+        data.s = data.frame(LED = c('A','B','C','D'), Alpha = NA, Ek = NA, Pm = NA, Em = NA, AlphaW = NA, SErP = NA,
+                            nPSII = NA, RCII = NA, stringsAsFactors = FALSE)
+
+        parms = data.frame(Ka = NA, Chl.multiplier = NA, QR.threshold = NA, C.derivation = NA, Tau.PQ = NA, Tau.SQ = NA)
+        suppressWarnings({
+            while (TRUE) {
+                ## Load file line by line
+                line = readLines(con, n = 1)
+                if (length(line) == 0) {
+                    break
+                }
+                line = strsplit(line, split = ',')[[1]]
+
+                if (length(line) > 1) {
+                    ## Check for PARAM values
+                    if (line[1] == 'FRRf3 Ka:') {
+                        parms$Ka = as.numeric(line[2])
+                    }
+                    else if (line[1] == '[Chl] multiplier:') {
+                        parms$Chl.multiplier = as.numeric(line[2])
+                    }
+                    else if (line[1] == 'QR threshold:') {
+                        parms$QR.threshold = line[2]
+                    }
+                    else if (line[1] == 'C derivation:') {
+                        parms$C.derivation = line[2]
+                    }
+                    else if (line[1] == 'TauPQ:') {
+                        parms$Tau.PQ = as.numeric(line[2])
+                    }
+                    else if (line[1] == 'TauSQ:') {
+                        parms$Tau.SQ = as.numeric(line[2])
+                    }
+
+
+                    else if (line[1] == 'Alpha:') {
+                        data.s$Alpha = as.numeric(line[2:5])
+                    }
+                    else if (line[1] == 'Ek:') {
+                        data.s$Ek = as.numeric(line[2:5])
+                    }
+                    else if (line[1] == 'Pm:') {
+                        data.s$Pm = as.numeric(line[2:5])
+                    }
+                    else if (line[1] == 'Em:') {
+                        data.s$Em = as.numeric(line[2:5])
+                    }
+                    else if (line[1] == 'AlphaW:') {
+                        data.s$AlphaW = as.numeric(line[2:5])
+                    }
+                    else if (line[1] == 'SErP:') {
+                        data.s$SErP = as.numeric(line[2:5])
+                    }
+
+                    ## Data A Values
+                    else if (length(line) > 1 & line[2] == 'LED combination A (450 nm alone)') {
+                        line = readLines(con, n = 1) ## Next line
+                        while (TRUE) {
+                            line = readLines(con, n = 1) ## Next line
+                            if (length(line) == 0) {
+                                break
+                            }
+                            line = as.numeric(strsplit(line, split = ',')[[1]])
+
+                            if (is.na(line[2])) {
+                                break
+                            }
+                            if (line[2] > 0 & line[2] < 25) {
+                                data.a[line[2],] = line[c(2:22,24:30,32:37)]
+                            }
+
+                        }
+                    }
+
+                    ## Data B Values
+                    else if (length(line) > 1 & line[2] == 'LED combination B (450 + 530 nm)') {
+                        line = readLines(con, n = 1) ## Next line
+                        while (TRUE) {
+                            line = readLines(con, n = 1) ## Next line
+                            if (length(line) == 0) {
+                                break
+                            }
+                            line = as.numeric(strsplit(line, split = ',')[[1]])
+
+                            if (is.na(line[2])) {
+                                break
+                            }
+                            if (length(line) > 1 & line[2] > 0 & line[2] < 25) {
+                                data.b[line[2],] = line[c(2:22,24:30,32:37)]
+                            }
+
+                        }
+                    }
+
+                    ## Data C Values
+                    else if (length(line) > 1 & line[2] == 'LED combination C (450 + 624 nm)') {
+                        line = readLines(con, n = 1) ## Next line
+                        while (TRUE) {
+                            line = readLines(con, n = 1) ## Next line
+                            if (length(line) == 0) {
+                                break
+                            }
+                            line = as.numeric(strsplit(line, split = ',')[[1]])
+
+                            if (is.na(line[2])) {
+                                break
+                            }
+                            if (line[2] > 0 & line[2] < 25) {
+                                data.c[line[2],] = line[c(2:22,24:30,32:37)]
+                            }
+
+                        }
+                    }
+
+                    ## Data D Values
+                    else if (length(line) > 1 & line[2] == 'LED combination D (450 + 530 + 624 nm)') {
+                        line = readLines(con, n = 1) ## Next line
+                        while (TRUE) {
+                            line = readLines(con, n = 1) ## Next line
+                            if (length(line) == 0) {
+                                break
+                            }
+                            line = as.numeric(strsplit(line, split = ',')[[1]])
+
+                            if (length(line) > 1 & is.na(line[2])) {
+                                break
+                            }
+                            if (length(line) > 1 & line[2] > 0 & line[2] < 25) {
+                                data.d[line[2],] = line[c(2:22,24:30,32:37)]
+                            }
+
+                        }
+                    }
+
+                }
+            }
+            if (verbose) { message('... Success.')}
+        })
+
+        close(con)
+
+        ## Generate Datetime stamp:
+
+        datetime = tryCatch(
+            {
+                year = substr(file.name, 1, 4)
+                month = substr(file.name, 5, 6)
+                day = substr(file.name, 7, 8)
+                hour = substr(file.name, 10, 11)
+                minute = substr(file.name, 12, 13)
+                second = substr(file.name, 14, 15)
+
+                as.POSIXct(paste0(year, '-', month, '-', day, ' ', hour, ':', minute, ':', second), tz = 'UTC')
+            },
+            error = function(c) {
+                NA
+            }
+        )
+        if (!is.na(datetime)) {
+        result[[paste0('Y', year, month, day, hour, minute, second)]] = list(Params = parms, S = data.s,
+                                                                             A = data.a, B = data.b, C = data.c, D = data.d,
+                                                                             Datetime = datetime, File = paste0(file.name))
+        } else {
+            result[[file.name]] = list(Params = parms, S = data.s,
+                                                                                 A = data.a, B = data.b, C = data.c, D = data.d,
+                                                                                 Datetime = datetime, File = paste0(file.name))
+        }
+    }
+
+    result$meta = list(
+        # Source.version = packageVersion('TheSource'),
+        R.version = R.version.string
+    )
+    ## Return
+    result
+}
+
+
+#' @title Webb 1974 Light Curve
+#' @param alpha the initial slope of the P vs E curve
+#' @param Ek a light saturation parameter
+#' @param E the photosynthetically active radiation
+#' @export
+model.Webb1974 = function(alpha, Ek, E) {
+    alpha * Ek * (1 - exp(-E/Ek))
+}
+
+
+#' @title Platt 1980 Light Curve
+#' @export
+#' @inheritParams model.Webb1974
+model.Platt1980 = function(alpha, beta, Ps, E) {
+    Ps * (1 - exp(-1 * alpha * E / Ps)) * exp(-beta * E / Ps)
+}
+
+
+#' @title Jassby 1976 Light Model
+#' @export
+#' @inheritParams model.Webb1974
+model.Jassby1976 = function(alpha, Ek, E) {
+    alpha * Ek * tanh(E / Ek)
+}
+
+
+#' @title Eilers 1988 Light Model
+#' @export
+#' @inheritParams model.Webb1974
+model.Eilers1988 = function(alpha, Eopt, Pm, E) {
+    a = 1 / (alpha * Eopt^2)
+    b = 1 / Pm - 2 / (alpha * Eopt)
+    c = 1/ alpha
+
+    E / (a * E^2 + b * E + c)
+} #there is a beta term in here - the w term. inhibition term stuff
+# w = b/sqrt(a*c). in teh results section, plug abc into equation to calc w?
+
+#' @title Which Closest Time
+#' @description  Find the indicies of the closest times for each entry of x
+#' @export
+which.closest.time = function(x, y) {
+  if (length(y) > 1) {
+    l = rep(NA, length(x))
+    for (i in 1:length(x)) {
+      l[i] = which.min(as.numeric(difftime(x[i], y, units='mins'))^2)
+    }
+  } else {
+    l = which.min(as.numeric(difftime(x, y, units='mins'))^2)
+  }
+  l
+}
+
+#' @title Parameter Search
+#' @author Thomas Bryce Kelly
+#' @description Implements a recursive grid search routine to solve optimization problems in arbitrary dimensions.
+#' @param n Number of recursions to perform
+#' @param cost The cost function which must return a numeric value and accept parameter values as the first arguments and in the order they are provided.
+#' @param ... Optional argument that is passed directly onto the cost function
+#' @param bounds A dataframe containing the minimum and maximum values permitted of each parameter
+#' @param splits The number of subdivisions to perform for each dimension (so grid size is n x splits ^ dimensionality)
+#' @param progression The size of the new search-space to interrogate. A value between 1 and splits/2. Default value (NULL) will yeield a progression of max(1, splits/4), good for most problems.
+#' @export
+parameter.search = function(n, cost, grid = NULL, bounds, splits = 10, progression = NULL, verbose = T, ...) {
+
+  if (verbose){
+    message('Starting Parameter Search')
+    message('Parameter search is an iterative grid search algorithm that seeks the parameters that minimize\nan objective cost function given a set of parameter bounds.')
+  }
+
+  ## Init Timer
+  a = Sys.time()
+
+  if (splits <= 2) { stop('splits argument must be an integer greater than or equal to 3!')}
+  if(is.null(progression)) {
+    progression = max(1, ceiling(splits / 4))
+    if (verbose) { message(' No Progresssion given, default to:\t', progression) }
+  }
+
+  splits = round(splits)
+  if (verbose) {message(' Number of splits set to:\t\t', splits)}
+  ## How many dimensions
+  dim = nrow(bounds)
+
+  ## Setup search grid
+  b = list()
+  for (i in 1:nrow(bounds)) {
+    if (bounds[i,1] == bounds[i,2]) {
+      b[[i]] = bounds[i,1]
+    } else {
+      b[[i]] = seq(bounds[i,1], bounds[i,2], length.out = splits)
+    }
+  }
+  argnames = formalArgs(cost)
+  argnames = argnames[!argnames %in% names(list(...))] # don't include arguments passed through elipsis
+
+  if (is.null(grid)) {
+    grid = do.call('expand.grid', b)
+    colnames(grid) = formalArgs(cost)[1:dim]
+  }
+  grid$cost = NA
+
+  if (verbose) {
+    message(' Mimimum bounds provided for ', paste(colnames(grid)[-ncol(grid)], collapse = ', '), ' are: ',
+            paste(bounds[,1], collapse = ', '))
+    message(' Maximum bounds provided for ', paste(colnames(grid)[-ncol(grid)], collapse = ', '), ' are: ',
+            paste(bounds[,2], collapse = ', '))
+  }
+
+  ## Calculate cost function at each grid location
+  best = Inf
+  for (i in 1:nrow(grid)) {
+    args = as.list(grid[i, 1:dim])
+    names(args) = argnames[1:length(args)]
+    args = c(args, list(...))
+
+    #if (length(args) > length(formalArgs(cost))) { stop('Number of function arguments exceeds what function is expecting.') }
+    grid$cost[i] = do.call(cost, args) # cost(grid[i, 1:dim])
+    if (verbose & grid$cost[i] < best) {
+      message(Sys.time(), ': New optimal parameter set found for n = ', n,': ', paste(grid[i,], collapse = ', '))
+      best = grid$cost[i]
+    }
+  }
+
+  ## Best grid location
+  l = which.min(grid$cost)
+  if (n == 1) {
+    res = list(min = grid[l,], bounds = bounds, grid = grid, history = grid[l,], full.grid = grid)
+  } else{
+
+    ## Setup new bounding box
+    loci = grid[l, 1:dim]
+    bounds.new = data.frame(min = as.numeric(loci), max = as.numeric(loci))
+    for (i in 1:dim) {
+      bounds.new$min[i] = max(bounds$min[i], bounds.new$min[i] - progression * (bounds$max[i] - bounds$min[i]) / splits)
+      bounds.new$max[i] = min(bounds$max[i], bounds.new$max[i] + progression * (bounds$max[i] - bounds$min[i]) / splits)
+    }
+
+    ## Call parameter.search recursively
+    res = parameter.search(n-1, cost, ..., bounds = bounds.new, splits = splits, progression = progression, verbose = F)
+    res$history = rbind(res$history, grid[l,])
+    res$full.grid = rbind(res$full.grid, grid)
+  }
+  ## Return
+  res
+}
