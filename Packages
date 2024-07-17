@@ -1,0 +1,8 @@
+## Load Necessary Packages
+## MLB
+
+library(tidyverse)
+# library(palettetown) # emotional support pokemon package 
+library(dplyr)
+library(ggplot2)
+# library(TheSource) # Depreciated but never forgotten 
