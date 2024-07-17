@@ -1,0 +1,25 @@
+## Load in a match.sheet
+## This is a .csv file accompyaning your FRRf data files
+## Usually containing relevant culture and environmental data (Culture ID, PAR, Qy, Chlorophyll, [cell], etc.]
+## Read the "About the Match.sheet" section for more information
+
+# Set wd #####
+
+setwd("C:/Users/mlb72/OneDrive/Documents")
+
+# Read .csv #####
+Fcyl.match<-read.csv('Fcyl_24hr_Diel_Match.sheet.csv')
+
+## .POSIXct =====
+Fcyl.match$Match.time<-as.POSIXct(as.character(Fcyl.match$Match.time))
+
+print(Fcyl.match$Match.time)
+
+# MATCH FILES #####
+#### IMPORTANT: Must have column File.name with the exact FRRf file name corresponding to data! Info on how to do this is in the "About the Match.sheet" file
+
+for (i in seq_along(frrf)) {
+  filename <- frrf[[i]]$File[1]
+  rows <- Fcyl.match[Fcyl.match$File.name == filename, -1]
+  frrf[[i]]$Label <- bind_rows(frrf[[i]]$Label, rows)
+}
