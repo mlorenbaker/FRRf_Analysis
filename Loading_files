@@ -1,0 +1,31 @@
+## Loading and organizing FRRf files
+
+# Set wd #####
+
+setwd("C:/Users/mlb72/OneDrive/Documents")
+
+# Load files #####
+
+frrf.files = list.files('data_folder')  # FRRf files should be together in a data folder 
+
+frrf = load.frrf(input.dir = 'data_folder/', file.names = frrf.files)
+
+# Remove end file #####
+#### TBK load.frrf() function generates a metadata file- must be removed prior to further analysis 
+
+length(frrf) #check length of loaded files
+
+frrf<-frrf[1:(length(frrf)-1)] # Removes last file
+
+length(frrf) # confirms correct length 
+
+# Datetime stamp #####
+#### From FRRf files
+
+Date.vector<-.POSIXct(character(length(frrf)))
+
+for (i in 1:(length(frrf))) { 
+  Date.vector[i]<-frrf[[i]]$Datetime
+  }  
+
+Date.vector 
