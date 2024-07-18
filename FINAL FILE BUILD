@@ -1,0 +1,154 @@
+## Other vectors and data to extract 
+
+# Step 1: Extract any final data #####
+
+# electron carbon conversion #####
+
+carbon.conversion.factor<-rep("a",length(frrf))
+
+for (i in 1:length(frrf)) {
+  carbon.conversion.factor[[i]]<-
+    carbon.conversion.factor[[i]]
+}
+
+# RCII #####
+
+RCII.vector<-rep(0,length(frrf))
+
+
+for (i in 1:length(frrf)) {
+  RCII.vector[[i]]<-frrf[[i]]$RCII
+}
+
+# Step 2: Bind vectors into a dataframe #####
+##### IMPORTANT: Pay attention to the note above each code chunk 
+
+## Run the following chunk if you only ran the FRRf phys code and Ek calculations. Then, skip to the last two chunks :) 
+file.matching.data.frame <- as.data.frame(cbind(File.vector,
+                                              
+                                                Pm = Pm.vector,
+                                                Fv.Fm = Fv.Fm.vector,
+                                                Fv.Fm.Ek = fvfm.Ek,
+                                                Chla.frrf = Chla.frrf.vector,
+                                             
+                                                Ek = Ek.vector,
+                                                p = p.vector,
+                                              
+                                                fo = Fo.vector,
+                                                fm = fm.vector,
+                                             
+                                                NSV = NSV.vector,
+                                                NSV.Ek = NSV.Ek,
+                                           
+                                                Sigma = sigma.vector,
+                                                Sigma.Ek = sigma.Ek,
+                                      
+                                                Alpha = alpha.vector,
+                                                Connectivity = C.vector,
+                                              
+                                                Tau = tau.vector,
+                                                Tau.Ek = tau.Ek
+                                                ))
+
+## Run this chunk if you had a match.sheet but only ran the FRRf phys code
+file.matching.data.frame <- as.data.frame(cbind(File.vector,
+                                                Culture.ID = Culture.ID.vector,
+                                                Replicate = replicate.vector,
+                                                # 
+                                                # Condition = condition.vector,
+                                                # Intensity = intensity.vector,
+                                                # Iron = iron.vector,
+                                                
+                                                Time = Time.vector,
+                                                PAR = PAR.vector,
+                                                QR = QR.vector,
+                                                Pm = Pm.vector,
+                                                Fv.Fm = Fv.Fm.vector,
+                                                Fv.Fm.Ek = fvfm.Ek,
+                                                Fv.Fm.E = fvfm.E,
+                                                Ek = Ek.vector,
+                                                p = p.vector,
+                                                # Chla_extract = Chla_extract.vector,
+                                                Chla.frrf = Chla.frrf.vector,
+                                                fo = Fo.vector,
+                                                fm = fm.vector,
+                                                # Cells = Cells.vector,
+                                                NSV = NSV.vector,
+                                                NSV.Ek = NSV.Ek,
+                                                NSV.E = NSV.E,
+                                                Sigma = sigma.vector,
+                                                Sigma.Ek = sigma.Ek,
+                                                Sigma.E = sigma.E,
+                                                Alpha = alpha.vector,
+                                                Connectivity = C.vector,
+                                                
+                                                Tau = tau.vector,
+                                                Tau.Ek = tau.Ek,
+                                                Tau.E = tau.E
+                                                ))
+
+
+## Run this chunk if you also ran the "Advanced" data code!
+##### Advanced as in caluclations with chlorophyll (RCII and on) 
+file.matching.data.frame <- as.data.frame(cbind(File.vector,
+                                                Culture.ID = Culture.ID.vector,
+                                                Replicate = replicate.vector,
+                                                Time = Time.vector,
+                                                Condition = condition.vector,
+                                                Intensity = intensity.vector,
+                                                Iron = iron.vector,
+                                                PAR = PAR.vector,
+                                                E = E.check.vector,
+                                                QR = QR.vector,
+                                                Pm = Pm.vector,
+                                                Fv.Fm = Fv.Fm.vector,
+                                                Fv.Fm.Ek = fvfm.Ek,
+                                                Fv.Fm.E = fvfm.E,
+                                                Ek = Ek.vector,
+                                                p = p.vector,
+                                                Chla_extract = Chla_extract.vector,
+                                                Chla.frrf = Chla.frrf.vector,
+                                                Qy = Qy.aqua.vector,
+                                                Cells = Cells.vector,
+                                                fo = Fo.vector,
+                                                fm = fm.vector,
+                                                Cells = Cells.vector,
+                                                NSV = NSV.vector,
+                                                NSV.Ek = NSV.Ek,
+                                                NSV.E = NSV.E,
+                                                Sigma = sigma.vector,
+                                                Sigma.Ek = sigma.Ek,
+                                                Sigma.E = sigma.E,
+                                                Alpha = alpha.vector,
+                                                Connectivity = C.vector,
+                                                JVPIIm = JVPIIm,
+                                                
+                                                Tau = tau.vector,
+                                                Tau.Ek = tau.Ek,
+                                                Tau.E = tau.E,
+                                                Prod_sigma = prod_sigma,
+                                                RCII = RCII.vector,
+                                                carbon.conversion.factor = carbon.conversion.factor,
+                                                Platt.alpha = Platt.alpha.vector,
+                                                Platt.beta = Platt.beta.vector,
+                                                Platt.Ps = Platt.Ps.vector,
+                                                Plat.cost = Platt.Cost.vector
+                                                # productivity = Prod.vector
+                                                ))
+
+# Step 3: BIND FINAL DATA #####
+
+## If you did NOT run any 'Advanced' code, run this chunk:
+Final.data.file <- file.matching.data.frame
+
+## If you DID run advanced code, run this chunk:
+Final.data.file<-cbind(file.matching.data.frame,Results.data.frame)
+
+# Step 4: EXPORT DATA #####
+
+write.csv(Final.data.file,
+          "C:/Users/mlb72/OneDrive/Documents/Rice/Lab/diurnal_paper/Diurnal_Data/Fcyl_diurnal_diel_C_.csv")
+
+
+### NOTE: MUST CHANGE FILE PATH AND FILE NAME!!!!
+
