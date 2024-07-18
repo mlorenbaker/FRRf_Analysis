@@ -1,0 +1,113 @@
+## The Sigma Algorithim from Schuback et al., 2016 / Oxoborough et al., 2012
+#### Note: Must have a match.sheet with mol chlorophyll a / cell
+
+# Step 1: Calculate Chla : RCII
+
+## RCII =====
+
+for (j in 1:length(frrf)) {
+  #calculates RCII/ mol 
+  frrf[[j]]$RCII[1]<-((frrf[[j]]$A$Fo[2]/
+                      (frrf[[j]]$A$Sigma[2]*(10^-18))*11800/1000000))/
+    (6.022e23)
+  #(10^-18...) converts nm^2 to m^2 and avocados # gets it into mols 
+  #estimates N- reaction centers
+  
+  frrf[[j]]$n[1]<-
+    (frrf[[j]]$RCII[1]/frrf[[j]]$Label$Cells/1000000)/(frrf[[j]]$Label$mol.chorophyll.a/2)
+  ##DIVIDING BY 1000000 HERE IS FOR CUBIC M CONVERSTION? check that out 
+  #diving by 2- PSII / PSI thing ratio 
+  
+}
+
+## Chla : RCII --> n vector =====
+
+n.vector<-rep(1,length(frrf))
+
+for (i in 1:length(frrf)) {
+  n.vector[[i]]<-frrf[[i]]$n
+}
+
+# n is RCII:Chla ratio !
+
+ratio.vector<-cbind(Culture.ID.vector,n.vector)
+
+ratio.vector
+
+# Step 2: Calculate electron : carbon conversion factor 
+
+carbon.conversion.factor<-rep(1,length(frrf))
+
+for (i in 1:length(frrf)) {
+  carbon.conversion.factor[[i]]<-(486*frrf[[i]]$NSV.E+1854)*(frrf[[i]]$n)
+}
+
+carbon.conversion.factor
+
+# Step 3: Sigma Alg!! #####
+
+
+for (j in 1:length(frrf) ) {
+  
+
+
+for (i in 1:length(frrf[[j]]$A$E)) {
+  
+
+#Fv/Fm' = (Fm' - F')/Fm', Not used in qp calculation except for Fv/Fm
+  
+  
+frrf[[j]]$A$Fv.Fm_p[i] <- (frrf[[j]]$A$Fm[i] - frrf[[j]]$A$Fo[i])/frrf[[j]]$A$Fm[i] 
+
+}
+
+for (i in 1:length(frrf[[j]]$A$E)) {
+
+  
+  #F0' = Fo/((Fv/Fm) + F0/Fm')
+
+frrf[[j]]$A$Fo_p[i] <- (frrf[[j]]$A$Fo[2]/((frrf[[j]]$A$Fv.Fm_p[2]) +( frrf[[j]]$A$Fo[2]   /  frrf[[j]]$A$Fm[i]    )      ) ) 
+
+#qp = (Fm'-F')/ (Fm' - Fo')
+
+
+frrf[[j]]$A$qp[i] <-(   (frrf[[j]]$A$Fm[i] - frrf[[j]]$A$Fo[i])      /  (frrf[[j]]$A$Fm[i] - frrf[[j]]$A$Fo_p[i]) ) 
+
+
+#mol electrons per day per RCII
+
+frrf[[j]]$A$ETR.RCII[i] <- (frrf[[j]]$A$qp[i] * frrf[[j]]$A$E[i]* (frrf[[j]]$A$Sigma[i] * 100) *1*0.006022)*86400
+
+#Estimating RCII
+
+frrf[[j]]$RCII[1] <- ((frrf[[j]]$A$Fo[2]/ (frrf[[j]]$A$Sigma[2] * (10^-18))*11800/1000000))/ (6.022e23)
+
+#calculating electron flux: mol electrons m^-3 d^-1
+
+frrf[[j]]$A$production[i] <- frrf[[j]]$A$ETR.RCII[i]* frrf[[j]]$RCII[1]
+
+#Converting electron flux to pmol C cell^-1 d^-1
+
+#converts cubic m^3 to ml
+
+frrf[[j]]$A$production[i] <- frrf[[j]]$A$production[i]/1000000
+
+#converts to pmol
+
+frrf[[j]]$A$production[i] <- frrf[[j]]$A$production[i]*10^12
+
+#converts electrons to carbon 
+
+frrf[[j]]$A$production[i] <- frrf[[j]]$A$production[i]/carbon.conversion.factor[[j]]
+
+#adjusts to approximate cell concentration 
+
+frrf[[j]]$A$production[i] <- frrf[[j]]$A$production[i]/frrf[[j]]$Label$Cells
+
+
+
+frrf[[j]]$A$production[i] <- frrf[[j]]$A$production[i]
+
+
+}}
+
