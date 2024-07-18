@@ -1,0 +1,85 @@
+## Platt et al., 1980
+
+# Step 1: Define the fucntions #####
+#### The initial model function itself was called in the large functions section
+
+## Model =====
+model.Platt1980 = function(alpha, beta, Ps, E) {
+  Ps * (1 - exp(-1 * alpha * E / Ps)) * exp(-beta * E / Ps)
+}
+
+## Residual Sum of Squares =====
+ssr = function(alpha, beta, Ps, E, JVPII) {
+  predicted = model.Platt1980(alpha = alpha, beta = beta, Ps = Ps, E = E)
+  cost = sum((predicted - JVPII)^2, na.rm = T) ## and remove any NA values!
+  
+  ## Return
+  cost
+}
+
+# Step 2: Create an empty data frame to store model results #####
+
+results = data.frame(FRRf = names(frrf), alpha = NA, beta = NA, Ps = NA, cost = NA)
+
+Step 3: Run the model #####
+#### COMPUTATIONALLY HEAVY!!!!
+
+for(i in 1:length(frrf)){
+
+
+fit = parameter.search(n = 3, cost = ssr, bounds = data.frame(min = c(0, 0, 0.001), max = c(.03, 0.010, 16)  ), splits = 10, E = frrf[[i]]$A$E , JVPII = frrf[[i]]$A$JVPII  )
+
+resid <- abs(model.Platt1980(fit$min$alpha,fit$min$beta, fit$min$Ps, E = frrf[[i]]$A$E)- frrf[[i]]$A$JVPII) #residual- calc resids
+
+fit = parameter.search(n = 3, cost = ssr, bounds = data.frame(min = c(0, 0, 0.001), max = c(.03, 0.010, 16)  ), splits = 20, E = frrf[[i]]$A$E[-which.max(resid)] , JVPII = frrf[[i]]$A$JVPII[-which.max(resid)]  ) #removing worst point/ resids. finds the max and (-) from dataset. can probs remove if use QR to filter data
+
+  results$alpha[i] = fit$min$alpha
+  results$beta[i] = fit$min$beta
+  results$Ps[i] = fit$min$Ps
+  results$cost[i] = fit$min$cost
+                       
+}
+
+# Step 4: Check results #####
+
+summary(results)
+
+Step 5: Put model results into FRRf data #####
+
+for (i in 1:length(frrf)) {
+  frrf[[i]]$Fit.data$Platt.Alpha=results$alpha[i]
+  frrf[[i]]$Fit.data$Platt.Beta=results$beta[i]
+  frrf[[i]]$Fit.data$Platt.Ps=results$Ps[i]
+  frrf[[i]]$Fit.data$Platt.Cost=results$cost[i]
+}
+
+# Step 6: Visualize data #####
+
+for (i in 1:length(frrf)) {
+  plot(frrf[[i]]$A$E, frrf[[i]]$A$JVPII, pch = 16, xlab = 'Light Intensity', ylab = 'JVPII', main = paste(results$FRRf[i], ' - ', results$cost[i], '-', i, frrf[[i]]$Label$Label))
+  
+  
+   E = c(1:3e3)
+  jvpii = model.Platt1980(alpha = results$alpha[i], beta = results$beta[i], Ps = results$Ps[i], E = E)
+  lines(E, jvpii)
+  
+}
+
+# Step 7: Extract data into vectors #####
+
+Platt.alpha.vector <- rep(0, nrow(results))#initilizing vectors to store data
+Platt.beta.vector <- rep(0, nrow(results)) 
+Platt.Ps.vector  <- rep(0, nrow(results))
+Platt.Cost.vector <- rep(0, nrow(results))  
+
+
+for(i in 1:length(1:nrow(results))){
+  Platt.alpha.vector[i] <- frrf[[i]]$Fit.data$Platt.Alpha
+  Platt.beta.vector[i] <- frrf[[i]]$Fit.data$Platt.Beta
+  Platt.Ps.vector[i] <- frrf[[i]]$Fit.data$Platt.Ps
+  Platt.Cost.vector[i] <- frrf[[i]]$Fit.data$Platt.Cost
+}
+
+
+
+
