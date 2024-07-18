@@ -1,0 +1,120 @@
+## Load in a match.sheet
+## This is a .csv file accompyaning your FRRf data files
+## Usually containing relevant culture and environmental data (Culture ID, PAR, Qy, Chlorophyll, [cell], etc.]
+## Read the "About the Match.sheet" section for more information
+
+# Set wd #####
+
+setwd("C:/Users/mlb72/OneDrive/Documents")
+
+# Read .csv #####
+Fcyl.match<-read.csv('Fcyl_24hr_Diel_Match.sheet.csv')
+
+## .POSIXct =====
+Fcyl.match$Match.time<-as.POSIXct(as.character(Fcyl.match$Match.time))
+
+print(Fcyl.match$Match.time)
+
+# MATCH FILES #####
+#### IMPORTANT: Must have column File.name with the exact FRRf file name corresponding to data! Info on how to do this is in the "About the Match.sheet" file
+
+for (i in seq_along(frrf)) {
+  filename <- frrf[[i]]$File[1]
+  rows <- Fcyl.match[Fcyl.match$File.name == filename, -1]
+  frrf[[i]]$Label <- bind_rows(frrf[[i]]$Label, rows)
+}
+
+# Extract data from Match.sheet #####
+##### NOTE: Depending on your data, the specific data and values will be DIFFERENT!! 
+##### YOU WILL 99% OF THE TIME NEED TO ADJUST THESE EVERY TIME BASED ON YOUR MATCH.SHEET COLUMNS 
+
+# Culture.ID #####
+
+Culture.ID.vector<-rep("a",length(frrf))
+
+for (i in 1:length(frrf)) {
+  Culture.ID.vector[[i]]<-
+    as.character(frrf[[i]]$Label$Culture.Id)
+}
+
+# Datetime #####
+
+Time.vector<-rep("a",length(frrf))
+
+for (i in 1:length(frrf)) {
+  Time.vector[[i]]<-
+    as.character(frrf[[i]]$Label$Match.time)
+}
+
+# Cells #####
+
+Cells.vector<-rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  Cells.vector[[i]] <- as.numeric(frrf[[i]]$Label$Cells)
+}
+
+# Chla extract #####
+
+Chla_extract.vector<-rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  Chla_extract.vector[i]<-as.numeric(frrf[[i]]$Label$mol.chorophyll.a)
+}
+
+# Qy #####
+
+Qy.aqua.vector<-rep("a",length(frrf))
+
+# for (i in 1:length(frrf)) {
+#   Qy.aqua.vector[[i]] <- as.numeric(frrf[[i]]$Label$Qy)
+# }
+
+# PAR #####
+
+PAR.vector <- rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  PAR.vector[i] <- as.numeric(frrf[[i]]$Label$PAR)
+}
+
+# Replicate #####
+
+replicate.vector <- rep("a", length(frrf))
+
+# for (i in 1:length(frrf)) {
+#   replicate.vector[[i]] <- frrf[[i]]$Label$Replicate
+# }
+
+# notes #####
+
+notes.vector <- rep("a", length(frrf)) 
+
+# for (i in 1:length(frrf)) {
+#   notes.vector[[i]] <- frrf[[i]]$Label$Notes
+# }
+
+# Intensity #####
+
+intensity.vector <- rep("a", length(frrf)) 
+
+for (i in 1:length(frrf)) {
+  intensity.vector[[i]] <- frrf[[i]]$Label$Intensity
+}
+
+# Condition #####
+
+condition.vector <- rep("a", length(frrf)) 
+
+for (i in 1:length(frrf)) {
+  condition.vector[[i]] <- frrf[[i]]$Label$Condition
+}
+
+# Iron #####
+
+iron.vector <- rep("a", length(frrf)) 
+
+for (i in 1:length(frrf)) {
+  iron.vector[[i]] <- frrf[[i]]$Label$Iron
+}
+
