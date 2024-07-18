@@ -1,0 +1,208 @@
+## Calculate values at PAR
+## IF YOU HAVE A MATCH SHEET WTIH INCUBATION/ ENVIRONMENTAL PAR DATA ONLY
+##### Calc. the parameter at the light intensity of the incubation at measurement time 
+
+# Step 1: Calculate slopes between each point #####
+#### These are the same slopes from the Ek calculation 
+
+# Fv/Fm #####
+
+for (j in 1:length(frrf)) {
+  for (i in 1:16) {
+    frrf[[j]]$fvfm.slopes[i] <- ((frrf[[j]]$A$Fv.Fm[i + 1] - frrf[[j]]$A$Fv.Fm[i]) / (frrf[[j]]$A$E[i + 1] - frrf[[j]]$A$E[i]))
+  }
+}
+
+# Tau #####
+
+for (j in 1:length(frrf)) {
+  for (i in 1:16) {
+    frrf[[j]]$Tau.slopes[i] <- ((frrf[[j]]$A$TauES[i + 1] - frrf[[j]]$A$TauES[i]) / (frrf[[j]]$A$E[i + 1] - frrf[[j]]$A$E[i]))
+  }
+}
+
+# Sigma ######
+
+for (j in 1:length(frrf)) {
+  for (i in 1:16) {
+    frrf[[j]]$Sigma.slopes[i] <- ((frrf[[j]]$A$Sigma[i + 1] - frrf[[j]]$A$Sigma[i]) / (frrf[[j]]$A$E[i + 1] - frrf[[j]]$A$E[i]))
+  }
+}
+
+
+# p #####
+
+for (j in 1:length(frrf)) {
+  for (i in 1:16) {
+    frrf[[j]]$P.slopes[i] <- ((frrf[[j]]$A$p[i + 1] - frrf[[j]]$A$p[i]) / (frrf[[j]]$A$E[i + 1] - frrf[[j]]$A$E[i]))
+  }
+}
+
+# NPQ #####
+
+for (j in 1:length(frrf)) {
+  for (i in 1:16) {
+    frrf[[j]]$NPQ.slopes[i] <- ((frrf[[j]]$A$NPQ[i + 1] - frrf[[j]]$A$NPQ[i]) / (frrf[[j]]$A$E[i + 1] - frrf[[j]]$A$E[i]))
+  }
+}
+
+# NSV #####
+
+for (j in 1:length(frrf)) {
+  for (i in 1:16) {
+    frrf[[j]]$NSV.slopes[i] <- ((frrf[[j]]$A$NSV[i + 1] - frrf[[j]]$A$NSV[i]) / (frrf[[j]]$A$E[i + 1] - frrf[[j]]$A$E[i]))
+  }
+}
+
+# Step 2: Calculate values at PAR #####
+
+# Fv/Fm #####
+
+for (i in 1:length(frrf)) {
+  Evector <- frrf[[i]]$A$E
+  PAR <- frrf[[i]]$Label$PAR
+  I.higher <- which(Evector > PAR)
+  I.lower <- which (Evector <= PAR)
+  Higher.bound <- min(I.higher)
+  Lower.bound <- max(I.lower)
+  Lowest.E <- frrf[[i]]$A$E[Lower.bound]
+  fvfm.intercept <- frrf[[i]]$A$Fv.Fm[2]
+  slope <- frrf[[i]]$fvfm.slopes[Lower.bound]
+  frrf[[i]]$Fvfm.E <- as.numeric((slope * (PAR) + fvfm.intercept))
+  
+}
+
+# Tau #####
+
+for (i in 1:length(frrf)) {
+  Evector <- frrf[[i]]$A$E
+  PAR <- frrf[[i]]$Label$PAR
+  I.higher <- which(Evector > PAR)
+  I.lower <- which (Evector <= PAR)
+  Higher.bound <- min(I.higher)
+  Lower.bound <- max(I.lower)
+  Lowest.E <- frrf[[i]]$A$E[Lower.bound]
+  tau.intercept <- frrf[[i]]$A$TauES[2]
+  slope <- frrf[[i]]$Tau.slopes[Lower.bound]
+  frrf[[i]]$Tau.E <- as.numeric((slope * (PAR) + tau.intercept))
+  
+}
+
+# Sigma #####
+
+for (i in 1:length(frrf)) {
+  Evector <- frrf[[i]]$A$E
+  PAR <- frrf[[i]]$Label$PAR
+  I.higher <- which(Evector > PAR)
+  I.lower <- which (Evector <= PAR)
+  Higher.bound <- min(I.higher)
+  Lower.bound <- max(I.lower)
+  Lowest.E <- frrf[[i]]$A$E[Lower.bound]
+  sigma.intercept <- frrf[[i]]$A$Sigma[2]
+  slope <- frrf[[i]]$Sigma.slopes[Lower.bound]
+  frrf[[i]]$Sigma.E <- as.numeric((slope * (PAR) + sigma.intercept))
+  
+}
+
+# p #####
+
+for (i in 1:length(frrf)) {
+  Evector <- frrf[[i]]$A$E
+  PAR <- frrf[[i]]$Label$PAR
+  I.higher <- which(Evector > PAR)
+  I.lower <- which (Evector <= PAR)
+  Higher.bound <- min(I.higher)
+  Lower.bound <- max(I.lower)
+  Lowest.E <- frrf[[i]]$A$E[Lower.bound]
+  p.intercept <- frrf[[i]]$A$p[2]
+  slope <- frrf[[i]]$P.slopes[Lower.bound]
+  frrf[[i]]$P.E <- as.numeric((slope * (PAR) + p.intercept))
+  
+}
+
+# NSV #####
+
+for (i in 1:length(frrf)) {
+  Evector <- frrf[[i]]$A$E
+  PAR <- frrf[[i]]$Label$PAR
+  I.higher <- which(Evector > PAR)
+  I.lower <- which (Evector <= PAR)
+  Higher.bound <- min(I.higher)
+  Lower.bound <- max(I.lower)
+  Lowest.E <- frrf[[i]]$A$E[Lower.bound]
+  NSV.intercept <- frrf[[i]]$A$NSV[2]
+  slope <- frrf[[i]]$NSV.slopes[Lower.bound]
+  frrf[[i]]$NSV.E <- as.numeric((slope * (PAR) + NSV.intercept))
+  
+}
+
+# NPQ #####
+
+for (i in 1:length(frrf)) {
+  Evector <- frrf[[i]]$A$E
+  PAR <- frrf[[i]]$Label$PAR
+  I.higher <- which(Evector > PAR)
+  I.lower <- which (Evector <= PAR)
+  Higher.bound <- min(I.higher)
+  Lower.bound <- max(I.lower)
+  Lowest.E <- frrf[[i]]$A$E[Lower.bound]
+  NPQ.intercept <- frrf[[i]]$A$NPQ[2]
+  slope <- frrf[[i]]$NPQ.slopes[Lower.bound]
+  frrf[[i]]$NPQ.E <- as.numeric((slope * (PAR) + NPQ.intercept))
+  
+}
+
+# Step 3: Extract values into vectors #####
+
+# Values at PAR #####
+
+## Fv.Fm.PAR =====
+
+fvfm.E <- rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  fvfm.E[[i]] <- frrf[[i]]$Fvfm.E
+}
+
+## Tau.PAR =====
+
+tau.E <- rep(0, length(frrf))
+
+for (i in 1:length(frrf)) {
+  tau.E[[i]] <- frrf[[i]]$Tau.E
+}
+
+## Sigma.PAR =====
+
+sigma.E <- rep(0, length(frrf))
+
+for (i in 1:length(frrf)) {
+  sigma.E[[i]] <- frrf[[i]]$Sigma.E
+}
+
+
+# p.PAR =====
+
+p.E <- rep(0, length(frrf))
+
+for (i in 1:length(frrf)) {
+  p.E[[i]] <- frrf[[i]]$P.E
+}
+
+# NSV.PAR =====
+
+NSV.E <- rep(0, length(frrf))
+
+for (i in 1:length(frrf)) {
+  NSV.E[[i]] <- frrf[[i]]$NSV.E
+}
+
+# NPQ.PAR =====
+
+NPQ.E <- rep(0, length(frrf))
+
+for (i in 1:length(frrf)) {
+  NPQ.E[[i]] <- frrf[[i]]$NPQ.E
+}
+
+
