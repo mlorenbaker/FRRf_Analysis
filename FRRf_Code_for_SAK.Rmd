@@ -1,0 +1,1567 @@
+---
+title: "MB_FRRf_complete_code_B"
+author: "MLB"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# FRRf Complete Code
+
+```{r Packages}
+
+library(tidyverse)
+# library(palettetown)
+library(dplyr)
+library(ggplot2)
+# library(TheSource)
+
+```
+
+## Functions from TK's TheSource package needed for FRRf code:
+
+load.frrf()
+
+which.closest.time()
+
+model.platt1980()
+
+```{r function}
+
+## Functions for analyzing FRRF Output
+##
+## Author: Thomas Bryce Kelly (tkelly@alaska.edu)
+## http://about.tkelly.org/
+##
+## College of Fisheries and Ocean Sciences
+## University of Alaska Fairbanks
+##
+## Dept of Earth, Ocean & Atmospheric Sciences
+## Florida State University
+
+
+
+#' @title Load FRRF Datafiles
+#' @author Thomas Bryce Kelly
+#' @param input.dir the input directory
+#' @param files.names the name of the file in the input directory (default will load all files in that directory)
+#' @export
+load.frrf = function(input.dir, file.names = NULL, verbose = T) {
+    if (is.null(file.names)) {
+        if (verbose) { message('No files provided, attempting to load all files in target directory.')}
+        file.names = list.files(input.dir, pattern = '*.csv')
+    }
+
+    if (verbose) { message('Preparing to load ', length(file.names), ' files.')}
+    result = list()
+
+    for (file.name in file.names) {
+
+        if (verbose) { message('Loading ', paste0(input.dir, file.name), appendLF = F)}
+
+        con = file(paste0(input.dir, file.name), "r")
+
+        col.names = c('Saq', 'E', 'Start', 's', 'Chl', 'ADC', 'rP.obs', 'rP.fit', 'JPII', 'JVPII', 'Fo', 'Fm', 'Fv.Fm',
+                      'C', 'p', 'RSigma', 'Sigma', 'CSQ', 'TauES', 'NPQ', 'NSV', 'QR', 'Qo', 'Qm', 'Qo.SE', 'Qm.SE',
+                      'Q.SE', 'Q.SE.ratio', 'Qo.points', 'Qo.slope', 'Qo.int', 'Qm.points', 'Qm.slope', 'Qm.int')
+
+        data.a = data.frame(Saq = NA, E = NA, Start = NA, s = NA, Chl = NA, ADC = NA,
+                            rP.obs = NA, rP.fit = NA, JPII = NA, JVPII = NA, Fo = NA,
+                            Fm = NA, Fv.Fm = NA, C = NA, p = NA, RSigma = NA, Sigma = NA, CSQ = NA,
+                            TauES = NA, NPQ = NA, NSV = NA, QR = NA, Qo = NA, Qm = NA,
+                            Qo.SE = NA, Qm.SE = NA, Q.SE = NA, Q.SE.ratio = NA, Qo.points = NA,
+                            Qo.slope = NA, Qo.int = NA, Qm.points = NA, Qm.slope = NA, QM.int = NA)
+
+        data.b = data.a
+        data.c = data.a
+        data.d = data.a
+
+        data.s = data.frame(LED = c('A','B','C','D'), Alpha = NA, Ek = NA, Pm = NA, Em = NA, AlphaW = NA, SErP = NA,
+                            nPSII = NA, RCII = NA, stringsAsFactors = FALSE)
+
+        parms = data.frame(Ka = NA, Chl.multiplier = NA, QR.threshold = NA, C.derivation = NA, Tau.PQ = NA, Tau.SQ = NA)
+        suppressWarnings({
+            while (TRUE) {
+                ## Load file line by line
+                line = readLines(con, n = 1)
+                if (length(line) == 0) {
+                    break
+                }
+                line = strsplit(line, split = ',')[[1]]
+
+                if (length(line) > 1) {
+                    ## Check for PARAM values
+                    if (line[1] == 'FRRf3 Ka:') {
+                        parms$Ka = as.numeric(line[2])
+                    }
+                    else if (line[1] == '[Chl] multiplier:') {
+                        parms$Chl.multiplier = as.numeric(line[2])
+                    }
+                    else if (line[1] == 'QR threshold:') {
+                        parms$QR.threshold = line[2]
+                    }
+                    else if (line[1] == 'C derivation:') {
+                        parms$C.derivation = line[2]
+                    }
+                    else if (line[1] == 'TauPQ:') {
+                        parms$Tau.PQ = as.numeric(line[2])
+                    }
+                    else if (line[1] == 'TauSQ:') {
+                        parms$Tau.SQ = as.numeric(line[2])
+                    }
+
+
+                    else if (line[1] == 'Alpha:') {
+                        data.s$Alpha = as.numeric(line[2:5])
+                    }
+                    else if (line[1] == 'Ek:') {
+                        data.s$Ek = as.numeric(line[2:5])
+                    }
+                    else if (line[1] == 'Pm:') {
+                        data.s$Pm = as.numeric(line[2:5])
+                    }
+                    else if (line[1] == 'Em:') {
+                        data.s$Em = as.numeric(line[2:5])
+                    }
+                    else if (line[1] == 'AlphaW:') {
+                        data.s$AlphaW = as.numeric(line[2:5])
+                    }
+                    else if (line[1] == 'SErP:') {
+                        data.s$SErP = as.numeric(line[2:5])
+                    }
+
+                    ## Data A Values
+                    else if (length(line) > 1 & line[2] == 'LED combination A (450 nm alone)') {
+                        line = readLines(con, n = 1) ## Next line
+                        while (TRUE) {
+                            line = readLines(con, n = 1) ## Next line
+                            if (length(line) == 0) {
+                                break
+                            }
+                            line = as.numeric(strsplit(line, split = ',')[[1]])
+
+                            if (is.na(line[2])) {
+                                break
+                            }
+                            if (line[2] > 0 & line[2] < 25) {
+                                data.a[line[2],] = line[c(2:22,24:30,32:37)]
+                            }
+
+                        }
+                    }
+
+                    ## Data B Values
+                    else if (length(line) > 1 & line[2] == 'LED combination B (450 + 530 nm)') {
+                        line = readLines(con, n = 1) ## Next line
+                        while (TRUE) {
+                            line = readLines(con, n = 1) ## Next line
+                            if (length(line) == 0) {
+                                break
+                            }
+                            line = as.numeric(strsplit(line, split = ',')[[1]])
+
+                            if (is.na(line[2])) {
+                                break
+                            }
+                            if (length(line) > 1 & line[2] > 0 & line[2] < 25) {
+                                data.b[line[2],] = line[c(2:22,24:30,32:37)]
+                            }
+
+                        }
+                    }
+
+                    ## Data C Values
+                    else if (length(line) > 1 & line[2] == 'LED combination C (450 + 624 nm)') {
+                        line = readLines(con, n = 1) ## Next line
+                        while (TRUE) {
+                            line = readLines(con, n = 1) ## Next line
+                            if (length(line) == 0) {
+                                break
+                            }
+                            line = as.numeric(strsplit(line, split = ',')[[1]])
+
+                            if (is.na(line[2])) {
+                                break
+                            }
+                            if (line[2] > 0 & line[2] < 25) {
+                                data.c[line[2],] = line[c(2:22,24:30,32:37)]
+                            }
+
+                        }
+                    }
+
+                    ## Data D Values
+                    else if (length(line) > 1 & line[2] == 'LED combination D (450 + 530 + 624 nm)') {
+                        line = readLines(con, n = 1) ## Next line
+                        while (TRUE) {
+                            line = readLines(con, n = 1) ## Next line
+                            if (length(line) == 0) {
+                                break
+                            }
+                            line = as.numeric(strsplit(line, split = ',')[[1]])
+
+                            if (length(line) > 1 & is.na(line[2])) {
+                                break
+                            }
+                            if (length(line) > 1 & line[2] > 0 & line[2] < 25) {
+                                data.d[line[2],] = line[c(2:22,24:30,32:37)]
+                            }
+
+                        }
+                    }
+
+                }
+            }
+            if (verbose) { message('... Success.')}
+        })
+
+        close(con)
+
+        ## Generate Datetime stamp:
+
+        datetime = tryCatch(
+            {
+                year = substr(file.name, 1, 4)
+                month = substr(file.name, 5, 6)
+                day = substr(file.name, 7, 8)
+                hour = substr(file.name, 10, 11)
+                minute = substr(file.name, 12, 13)
+                second = substr(file.name, 14, 15)
+
+                as.POSIXct(paste0(year, '-', month, '-', day, ' ', hour, ':', minute, ':', second), tz = 'UTC')
+            },
+            error = function(c) {
+                NA
+            }
+        )
+        if (!is.na(datetime)) {
+        result[[paste0('Y', year, month, day, hour, minute, second)]] = list(Params = parms, S = data.s,
+                                                                             A = data.a, B = data.b, C = data.c, D = data.d,
+                                                                             Datetime = datetime, File = paste0(file.name))
+        } else {
+            result[[file.name]] = list(Params = parms, S = data.s,
+                                                                                 A = data.a, B = data.b, C = data.c, D = data.d,
+                                                                                 Datetime = datetime, File = paste0(file.name))
+        }
+    }
+
+    result$meta = list(
+        # Source.version = packageVersion('TheSource'),
+        R.version = R.version.string
+    )
+    ## Return
+    result
+}
+
+
+#' @title Webb 1974 Light Curve
+#' @param alpha the initial slope of the P vs E curve
+#' @param Ek a light saturation parameter
+#' @param E the photosynthetically active radiation
+#' @export
+model.Webb1974 = function(alpha, Ek, E) {
+    alpha * Ek * (1 - exp(-E/Ek))
+}
+
+
+#' @title Platt 1980 Light Curve
+#' @export
+#' @inheritParams model.Webb1974
+model.Platt1980 = function(alpha, beta, Ps, E) {
+    Ps * (1 - exp(-1 * alpha * E / Ps)) * exp(-beta * E / Ps)
+}
+
+
+#' @title Jassby 1976 Light Model
+#' @export
+#' @inheritParams model.Webb1974
+model.Jassby1976 = function(alpha, Ek, E) {
+    alpha * Ek * tanh(E / Ek)
+}
+
+
+#' @title Eilers 1988 Light Model
+#' @export
+#' @inheritParams model.Webb1974
+model.Eilers1988 = function(alpha, Eopt, Pm, E) {
+    a = 1 / (alpha * Eopt^2)
+    b = 1 / Pm - 2 / (alpha * Eopt)
+    c = 1/ alpha
+
+    E / (a * E^2 + b * E + c)
+} #there is a beta term in here - the w term. inhibition term stuff
+# w = b/sqrt(a*c). in teh results section, plug abc into equation to calc w?
+
+#' @title Which Closest Time
+#' @description  Find the indicies of the closest times for each entry of x
+#' @export
+which.closest.time = function(x, y) {
+  if (length(y) > 1) {
+    l = rep(NA, length(x))
+    for (i in 1:length(x)) {
+      l[i] = which.min(as.numeric(difftime(x[i], y, units='mins'))^2)
+    }
+  } else {
+    l = which.min(as.numeric(difftime(x, y, units='mins'))^2)
+  }
+  l
+}
+
+#' @title Parameter Search
+#' @author Thomas Bryce Kelly
+#' @description Implements a recursive grid search routine to solve optimization problems in arbitrary dimensions.
+#' @param n Number of recursions to perform
+#' @param cost The cost function which must return a numeric value and accept parameter values as the first arguments and in the order they are provided.
+#' @param ... Optional argument that is passed directly onto the cost function
+#' @param bounds A dataframe containing the minimum and maximum values permitted of each parameter
+#' @param splits The number of subdivisions to perform for each dimension (so grid size is n x splits ^ dimensionality)
+#' @param progression The size of the new search-space to interrogate. A value between 1 and splits/2. Default value (NULL) will yeield a progression of max(1, splits/4), good for most problems.
+#' @export
+parameter.search = function(n, cost, grid = NULL, bounds, splits = 10, progression = NULL, verbose = T, ...) {
+
+  if (verbose){
+    message('Starting Parameter Search')
+    message('Parameter search is an iterative grid search algorithm that seeks the parameters that minimize\nan objective cost function given a set of parameter bounds.')
+  }
+
+  ## Init Timer
+  a = Sys.time()
+
+  if (splits <= 2) { stop('splits argument must be an integer greater than or equal to 3!')}
+  if(is.null(progression)) {
+    progression = max(1, ceiling(splits / 4))
+    if (verbose) { message(' No Progresssion given, default to:\t', progression) }
+  }
+
+  splits = round(splits)
+  if (verbose) {message(' Number of splits set to:\t\t', splits)}
+  ## How many dimensions
+  dim = nrow(bounds)
+
+  ## Setup search grid
+  b = list()
+  for (i in 1:nrow(bounds)) {
+    if (bounds[i,1] == bounds[i,2]) {
+      b[[i]] = bounds[i,1]
+    } else {
+      b[[i]] = seq(bounds[i,1], bounds[i,2], length.out = splits)
+    }
+  }
+  argnames = formalArgs(cost)
+  argnames = argnames[!argnames %in% names(list(...))] # don't include arguments passed through elipsis
+
+  if (is.null(grid)) {
+    grid = do.call('expand.grid', b)
+    colnames(grid) = formalArgs(cost)[1:dim]
+  }
+  grid$cost = NA
+
+  if (verbose) {
+    message(' Mimimum bounds provided for ', paste(colnames(grid)[-ncol(grid)], collapse = ', '), ' are: ',
+            paste(bounds[,1], collapse = ', '))
+    message(' Maximum bounds provided for ', paste(colnames(grid)[-ncol(grid)], collapse = ', '), ' are: ',
+            paste(bounds[,2], collapse = ', '))
+  }
+
+  ## Calculate cost function at each grid location
+  best = Inf
+  for (i in 1:nrow(grid)) {
+    args = as.list(grid[i, 1:dim])
+    names(args) = argnames[1:length(args)]
+    args = c(args, list(...))
+
+    #if (length(args) > length(formalArgs(cost))) { stop('Number of function arguments exceeds what function is expecting.') }
+    grid$cost[i] = do.call(cost, args) # cost(grid[i, 1:dim])
+    if (verbose & grid$cost[i] < best) {
+      message(Sys.time(), ': New optimal parameter set found for n = ', n,': ', paste(grid[i,], collapse = ', '))
+      best = grid$cost[i]
+    }
+  }
+
+  ## Best grid location
+  l = which.min(grid$cost)
+  if (n == 1) {
+    res = list(min = grid[l,], bounds = bounds, grid = grid, history = grid[l,], full.grid = grid)
+  } else{
+
+    ## Setup new bounding box
+    loci = grid[l, 1:dim]
+    bounds.new = data.frame(min = as.numeric(loci), max = as.numeric(loci))
+    for (i in 1:dim) {
+      bounds.new$min[i] = max(bounds$min[i], bounds.new$min[i] - progression * (bounds$max[i] - bounds$min[i]) / splits)
+      bounds.new$max[i] = min(bounds$max[i], bounds.new$max[i] + progression * (bounds$max[i] - bounds$min[i]) / splits)
+    }
+
+    ## Call parameter.search recursively
+    res = parameter.search(n-1, cost, ..., bounds = bounds.new, splits = splits, progression = progression, verbose = F)
+    res$history = rbind(res$history, grid[l,])
+    res$full.grid = rbind(res$full.grid, grid)
+  }
+  ## Return
+  res
+}
+
+
+```
+
+## Loading in FRRf files
+
+```{r data}
+
+setwd("C:/Users/mlb72/OneDrive/Documents")
+
+frrf.files = list.files('fcyl diel frrf')
+
+frrf = load.frrf(input.dir = 'fcyl diel frrf/', file.names = frrf.files)
+
+```
+
+TK's code has a metadata stamp- it creates an extra file at the end of the list that we need to remove to work with the files.
+
+```{r Check}
+
+# must remove TK's stamp file
+
+length(frrf) #check length of loaded files
+
+frrf<-frrf[1:(length(frrf)-1)] 
+
+length(frrf)
+
+```
+
+Once that is removed, we can format the Datetime stamp associated with the FRRf files.
+
+```{r datevector}
+# Date Vector from FRRf files #####
+
+Date.vector<-.POSIXct(character(length(frrf)))
+
+
+for (i in 1:(length(frrf))) { 
+  Date.vector[i]<-frrf[[i]]$Datetime
+  }  
+
+Date.vector #calls it to see
+
+```
+
+## Loading the Match.sheet.csv
+
+If you have a match sheet, we load it in now. A match sheet is a .csv that has a corresponding datetime stamp (in the format of "YYYY-MM-DD hh:mm:ss") that can be matched to the frrf files. It is useful for attaching specific data to the frrf files- like Culture.ID, Aquapen data, incubation notes, etc.
+
+```{r Match.sheet.csv}
+# Match time file
+
+setwd("C:/Users/mlb72/OneDrive/Documents")
+
+Fcyl.match<-read.csv('Fcyl_24hr_Diel_Match.sheet.csv')
+
+
+Fcyl.match$Match.time<-as.POSIXct(as.character(Fcyl.match$Match.time))
+
+print(Fcyl.match$Match.time)
+
+```
+
+### Match.time
+
+The next code will use the Datetime stamp from the FRRf files and the Match.sheet to pair the match.sheet data with the frrf files.
+
+You need the File.name s pasted in your match.sheet!
+
+Make sure you run this matching code ONCE, or it will double match and screw up the rest of the code.
+
+```{r}
+
+for (i in seq_along(frrf)) {
+  filename <- frrf[[i]]$File[1]
+  rows <- Fcyl.match[Fcyl.match$File.name == filename, -1]
+  frrf[[i]]$Label <- bind_rows(frrf[[i]]$Label, rows)
+}
+
+```
+
+## Photo-physiology Data
+
+This code will go into each frrf file and pull out desired values, such as Fv.Fm at 0 PAR and Ek. It can be changed based on what parameters you want- you just have to remember to update the final chunk of code that binds all the vectors into a single data frame.
+
+```{r Photophys}
+# E #####
+
+E.check.vector <- rep(0, length(frrf)) #light intensity! Make sure that at step 2, where we are pulling out the rest of the data, PAR is actually zero. 
+
+for (i in 1:length(frrf)) {
+  E.check.vector[[i]] <- frrf[[i]]$A$E[2]
+}
+
+# Fv.Fm #####
+
+Fv.Fm.vector <-rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  Fv.Fm.vector[i]<- frrf[[i]]$A$Fv.Fm[2]
+}
+
+# Sigma #####
+
+sigma.vector<-rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  sigma.vector[i]<-frrf[[i]]$A$Sigma[2]
+}
+
+# Tau #####
+
+tau.vector<-rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  tau.vector[i]<-frrf[[i]]$A$TauES[2]
+}
+
+# Ek #####
+
+Ek.vector<-rep(0,length(frrf)) 
+
+for (i in 1:length(frrf)) {
+  Ek.vector[i]<-frrf[[i]]$S$Ek[1]
+}
+
+# Alpha #####
+
+alpha.vector<-rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  alpha.vector[i]<-frrf[[i]]$S$Alpha[1]
+}
+
+# NSV #####
+
+NSV.vector<-rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  NSV.vector[i]<-frrf[[i]]$A$NSV[2]
+}
+
+# NPQ #####
+
+NPQ.vector<-rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  NPQ.vector[i]<-frrf[[i]]$A$NPQ[2]
+}
+
+# Chla #####
+
+Chla.frrf.vector<-rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  Chla.frrf.vector[i] <- frrf[[i]]$A$Chl[2]
+}
+
+# Pm #####
+Pm.vector<-rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  Pm.vector[[i]] <- frrf[[i]]$S$Pm[1]
+}
+
+
+
+# Fm #####
+
+fm.vector<-rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  fm.vector[[i]]<-frrf[[i]]$A$Fm[2]
+}
+
+# Fo #####
+
+Fo.vector<-rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  Fo.vector[i]<-frrf[[i]]$A$Fo[2]
+}
+
+# p #####
+
+p.vector<-rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  p.vector[i]<-frrf[[i]]$A$p[2]
+}
+
+# C #####
+
+C.vector<-rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  C.vector[i]<-frrf[[i]]$A$C[2]
+}
+
+# File #####
+
+File.vector<-rep(0,length(frrf)) #The frrf file name- another check to make sure the correct frrf file was matched in the match.sheet
+
+for (i in 1:length(frrf)) 
+{ File.vector[i]<-frrf[[i]]$File 
+  }
+
+# QR #####
+
+QR.vector <- rep("a", length(frrf)) 
+
+for (i in 1:length(frrf)) {
+  QR.vector[[i]] <- frrf[[i]]$A$QR[2]
+}
+
+
+# JVPIIm #####
+
+JVPIIm <- rep(0, length(frrf))
+
+for (i in 1:length(frrf)) {
+  JVPIIm[i] <- max(frrf[[i]]$A$JVPII)
+}
+
+
+print(E.check.vector)
+
+```
+
+## Calculate Photophys data
+
+Aka at Ek, at PAR
+
+Step 1: Calculate the slopes between each point on an X vs. E graph. Classic ((y2-y1)/(x2-x1)) equation for each parameter you want at Ek or PAR. The (1:#) part changes based on how many E steps you have- you may have to update it each time!
+
+```{r Slopes}
+# Fv/Fm #####
+
+for (j in 1:length(frrf)) {
+  for (i in 1:16) {
+    frrf[[j]]$fvfm.slopes[i] <- ((frrf[[j]]$A$Fv.Fm[i + 1] - frrf[[j]]$A$Fv.Fm[i]) / (frrf[[j]]$A$E[i + 1] - frrf[[j]]$A$E[i]))
+  }
+}
+
+# Tau #####
+
+for (j in 1:length(frrf)) {
+  for (i in 1:16) {
+    frrf[[j]]$Tau.slopes[i] <- ((frrf[[j]]$A$TauES[i + 1] - frrf[[j]]$A$TauES[i]) / (frrf[[j]]$A$E[i + 1] - frrf[[j]]$A$E[i]))
+  }
+}
+
+# Sigma ######
+
+for (j in 1:length(frrf)) {
+  for (i in 1:16) {
+    frrf[[j]]$Sigma.slopes[i] <- ((frrf[[j]]$A$Sigma[i + 1] - frrf[[j]]$A$Sigma[i]) / (frrf[[j]]$A$E[i + 1] - frrf[[j]]$A$E[i]))
+  }
+}
+
+
+# p #####
+
+for (j in 1:length(frrf)) {
+  for (i in 1:16) {
+    frrf[[j]]$P.slopes[i] <- ((frrf[[j]]$A$p[i + 1] - frrf[[j]]$A$p[i]) / (frrf[[j]]$A$E[i + 1] - frrf[[j]]$A$E[i]))
+  }
+}
+
+# NPQ #####
+
+for (j in 1:length(frrf)) {
+  for (i in 1:16) {
+    frrf[[j]]$NPQ.slopes[i] <- ((frrf[[j]]$A$NPQ[i + 1] - frrf[[j]]$A$NPQ[i]) / (frrf[[j]]$A$E[i + 1] - frrf[[j]]$A$E[i]))
+  }
+}
+
+# NSV #####
+
+for (j in 1:length(frrf)) {
+  for (i in 1:16) {
+    frrf[[j]]$NSV.slopes[i] <- ((frrf[[j]]$A$NSV[i + 1] - frrf[[j]]$A$NSV[i]) / (frrf[[j]]$A$E[i + 1] - frrf[[j]]$A$E[i]))
+  }
+}
+
+```
+
+### Calculate values at Ek
+
+```{r Ek}
+
+# Fv.Fm #####
+
+for (i in 1:length(frrf)) {
+  Evector <- frrf[[i]]$A$E # vector of E in frrf
+  Ek <- frrf[[i]]$S$Ek[1] # Ek value 
+  I.higher <- which(Evector > Ek) # where is E higher than the Ek?
+  I.lower <- which(Evector <= Ek) # where is E lower than or equal to Ek?
+  Higher.bound <- min(I.higher) # what is the minimum E of where E is higher than Ek?
+  Lower.bound <- max(I.lower) # what is the max E of where E is lower than Ek?
+  lowest.E <- frrf[[i]]$A$E[Lower.bound] # The max value of where E is lower than Ek
+  fv.fm.intercept <- frrf[[i]]$A$Fv.Fm[Lower.bound] # Fv.Fm associated with the max value of where E is lower than Ek
+  slope <- frrf[[i]]$fvfm.slopes[Lower.bound] # Slope where the max value of E is lower than Ek 
+  frrf[[i]]$Fv.Fm.Ek <- as.numeric(slope * (Ek - lowest.E) +
+                                     fv.fm.intercept) # equation to find the Fv.Fm at the file Ek value
+}
+
+# Tau #####
+
+for (i in 1:length(frrf)) {
+  Evector <- frrf[[i]]$A$E
+  Ek <- frrf[[i]]$S$Ek[1]
+  I.higher <- which(Evector > Ek)
+  I.lower <- which(Evector <= Ek)
+  Higher.bound <- min(I.higher)
+  Lower.bound <- max(I.lower)
+  lowest.E <- frrf[[i]]$A$E[Lower.bound]
+  Tau.intercept <- frrf[[i]]$A$TauES[Lower.bound]
+  slope <- frrf[[i]]$Tau.slopes[Lower.bound]
+  frrf[[i]]$Tau.Ek <- as.numeric(slope * (Ek - lowest.E) +
+                                    Tau.intercept)
+}
+
+# Sigma #####
+
+for (i in 1:length(frrf)) {
+  Evector <- frrf[[i]]$A$E
+  Ek <- frrf[[i]]$S$Ek[1]
+  I.higher <- which(Evector > Ek)
+  I.lower <- which(Evector <= Ek)
+  Higher.bound <- min(I.higher)
+  Lower.bound <- max(I.lower)
+  lowest.E <- frrf[[i]]$A$E[Lower.bound]
+  Sigma.intercept <- frrf[[i]]$A$Sigma[Lower.bound]
+  slope <- frrf[[i]]$Sigma.slopes[Lower.bound]
+  frrf[[i]]$Sigma.Ek <- as.numeric(slope * (Ek - lowest.E) +
+                                    Sigma.intercept)
+}
+
+# p #####
+
+for (i in 1:length(frrf)) {
+  Evector <- frrf[[i]]$A$E
+  Ek <- frrf[[i]]$S$Ek[1]
+  I.higher <- which(Evector > Ek)
+  I.lower <- which(Evector <= Ek)
+  Higher.bound <- min(I.higher)
+  Lower.bound <- max(I.lower)
+  lowest.E <- frrf[[i]]$A$E[Lower.bound]
+  p.intercept <- frrf[[i]]$A$p[Lower.bound]
+  slope <- frrf[[i]]$P.slopes[Lower.bound]
+  frrf[[i]]$p.ek <- as.numeric(slope * (Ek - lowest.E) +
+                                    p.intercept)
+}
+
+# NSV #####
+
+for (i in 1:length(frrf)) {
+  Evector <- frrf[[i]]$A$E
+  Ek <- frrf[[i]]$S$Ek[1]
+  I.higher <- which(Evector > Ek)
+  I.lower <- which(Evector <= Ek)
+  Higher.bound <- min(I.higher)
+  Lower.bound <- max(I.lower)
+  lowest.E <- frrf[[i]]$A$E[Lower.bound]
+  NSV.intercept <- frrf[[i]]$A$NSV[Lower.bound]
+  slope <- frrf[[i]]$NSV.slopes[Lower.bound]
+  frrf[[i]]$NSV.Ek <- as.numeric(slope * (Ek - lowest.E) +
+                                   NSV.intercept)
+}
+
+
+# NPQ #####
+
+for (i in 1:length(frrf)) {
+  Evector <- frrf[[i]]$A$E
+  Ek <- frrf[[i]]$S$Ek[1]
+  I.higher <- which(Evector > Ek)
+  I.lower <- which(Evector <= Ek)
+  Higher.bound <- min(I.higher)
+  Lower.bound <- max(I.lower)
+  lowest.E <- frrf[[i]]$A$E[Lower.bound]
+  NPQ.intercept <- frrf[[i]]$A$NPQ[Lower.bound]
+  slope <- frrf[[i]]$NPQ.slopes[Lower.bound]
+  frrf[[i]]$NPQ.Ek <- as.numeric(slope * (Ek - lowest.E) +
+                                   NPQ.intercept)
+}
+
+
+```
+
+### Values at PAR
+
+This code will calculate the desired values at what they would be under the acclimation PAR
+
+[A match.sheet with PAR data is necessary for this calculation!]{.underline}
+
+```{r}
+
+# Fv/Fm #####
+
+for (i in 1:length(frrf)) {
+  Evector <- frrf[[i]]$A$E
+  PAR <- frrf[[i]]$Label$PAR
+  I.higher <- which(Evector > PAR)
+  I.lower <- which (Evector <= PAR)
+  Higher.bound <- min(I.higher)
+  Lower.bound <- max(I.lower)
+  Lowest.E <- frrf[[i]]$A$E[Lower.bound]
+  fvfm.intercept <- frrf[[i]]$A$Fv.Fm[2]
+  slope <- frrf[[i]]$fvfm.slopes[Lower.bound]
+  frrf[[i]]$Fvfm.E <- as.numeric((slope * (PAR) + fvfm.intercept))
+  
+}
+
+# Tau #####
+
+for (i in 1:length(frrf)) {
+  Evector <- frrf[[i]]$A$E
+  PAR <- frrf[[i]]$Label$PAR
+  I.higher <- which(Evector > PAR)
+  I.lower <- which (Evector <= PAR)
+  Higher.bound <- min(I.higher)
+  Lower.bound <- max(I.lower)
+  Lowest.E <- frrf[[i]]$A$E[Lower.bound]
+  tau.intercept <- frrf[[i]]$A$TauES[2]
+  slope <- frrf[[i]]$Tau.slopes[Lower.bound]
+  frrf[[i]]$Tau.E <- as.numeric((slope * (PAR) + tau.intercept))
+  
+}
+
+# Sigma #####
+
+for (i in 1:length(frrf)) {
+  Evector <- frrf[[i]]$A$E
+  PAR <- frrf[[i]]$Label$PAR
+  I.higher <- which(Evector > PAR)
+  I.lower <- which (Evector <= PAR)
+  Higher.bound <- min(I.higher)
+  Lower.bound <- max(I.lower)
+  Lowest.E <- frrf[[i]]$A$E[Lower.bound]
+  sigma.intercept <- frrf[[i]]$A$Sigma[2]
+  slope <- frrf[[i]]$Sigma.slopes[Lower.bound]
+  frrf[[i]]$Sigma.E <- as.numeric((slope * (PAR) + sigma.intercept))
+  
+}
+
+# p #####
+
+for (i in 1:length(frrf)) {
+  Evector <- frrf[[i]]$A$E
+  PAR <- frrf[[i]]$Label$PAR
+  I.higher <- which(Evector > PAR)
+  I.lower <- which (Evector <= PAR)
+  Higher.bound <- min(I.higher)
+  Lower.bound <- max(I.lower)
+  Lowest.E <- frrf[[i]]$A$E[Lower.bound]
+  p.intercept <- frrf[[i]]$A$p[2]
+  slope <- frrf[[i]]$P.slopes[Lower.bound]
+  frrf[[i]]$P.E <- as.numeric((slope * (PAR) + p.intercept))
+  
+}
+
+# NSV #####
+
+for (i in 1:length(frrf)) {
+  Evector <- frrf[[i]]$A$E
+  PAR <- frrf[[i]]$Label$PAR
+  I.higher <- which(Evector > PAR)
+  I.lower <- which (Evector <= PAR)
+  Higher.bound <- min(I.higher)
+  Lower.bound <- max(I.lower)
+  Lowest.E <- frrf[[i]]$A$E[Lower.bound]
+  NSV.intercept <- frrf[[i]]$A$NSV[2]
+  slope <- frrf[[i]]$NSV.slopes[Lower.bound]
+  frrf[[i]]$NSV.E <- as.numeric((slope * (PAR) + NSV.intercept))
+  
+}
+
+# NPQ #####
+
+for (i in 1:length(frrf)) {
+  Evector <- frrf[[i]]$A$E
+  PAR <- frrf[[i]]$Label$PAR
+  I.higher <- which(Evector > PAR)
+  I.lower <- which (Evector <= PAR)
+  Higher.bound <- min(I.higher)
+  Lower.bound <- max(I.lower)
+  Lowest.E <- frrf[[i]]$A$E[Lower.bound]
+  NPQ.intercept <- frrf[[i]]$A$NPQ[2]
+  slope <- frrf[[i]]$NPQ.slopes[Lower.bound]
+  frrf[[i]]$NPQ.E <- as.numeric((slope * (PAR) + NPQ.intercept))
+  
+}
+
+```
+
+This code will extract the calculated values into vectors. The first chunk extracts the values at Ek, and the second chunk will extract the values at PAR. Ignore the second chunk if you do not have a match.sheet!
+
+```{r ek.vectors}
+
+
+# Values at Ek #####
+
+## Fv.Fm =====
+
+fvfm.Ek <- rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  fvfm.Ek[[i]] <- frrf[[i]]$Fv.Fm.Ek
+}
+
+## Tau.Ek =====
+
+tau.Ek <- rep(0, length(frrf))
+
+for (i in 1:length(frrf)) {
+  tau.Ek[[i]] <- frrf[[i]]$Tau.Ek
+}
+
+## Sigma.Ek =====
+
+sigma.Ek <- rep(0, length(frrf))
+
+for (i in 1:length(frrf)) {
+  sigma.Ek[[i]] <- frrf[[i]]$Sigma.Ek
+}
+
+## Ek.Ek =====
+
+Ek.ek <- rep(0, length(frrf))
+
+# for (i in 1:length(frrf)) {
+#   Ek.Ek[[i]] <- frrf[[i]]$Ek.Ek
+# }
+
+## Alpha.Ek =====
+
+alpha.Ek <- rep(0, length(frrf))
+
+# for (i in 1:length(frrf)) {
+#   alpha.Ek[[i]] <- frrf[[i]]$Akpha.Ek
+# }
+
+## Tau.Ek =====
+
+# tau.Ek <- rep(0, length(frrf))
+# 
+# for (i in 1:length(frrf)) {
+#   tau.Ek[[i]] <- frrf[[i]]$Tau.Ek
+# }
+
+## p.Ek =====
+
+p.Ek <- rep(0, length(frrf))
+
+# for (i in 1:length(frrf)) {
+#   p.Ek[[i]] <- frrf[[i]]$p.Ek
+# }
+
+## NSV.Ek =====
+
+NSV.Ek <- rep(0, length(frrf))
+
+for (i in 1:length(frrf)) {
+  NSV.Ek[[i]] <- frrf[[i]]$NSV.Ek
+}
+
+## NPQ.Ek =====
+
+NPQ.Ek <- rep(0, length(frrf))
+
+for (i in 1:length(frrf)) {
+  NPQ.Ek[[i]] <- frrf[[i]]$NPQ.Ek
+}
+
+```
+
+[***Ignore this chunk if you do not have a match.sheet!!!***]{.underline}
+
+```{r par.vectors}
+
+# Values at PAR #####
+
+## Fv.Fm.PAR =====
+
+fvfm.E <- rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  fvfm.E[[i]] <- frrf[[i]]$Fvfm.E
+}
+
+## Tau.PAR =====
+
+tau.E <- rep(0, length(frrf))
+
+for (i in 1:length(frrf)) {
+  tau.E[[i]] <- frrf[[i]]$Tau.E
+}
+
+## Sigma.PAR =====
+
+sigma.E <- rep(0, length(frrf))
+
+for (i in 1:length(frrf)) {
+  sigma.E[[i]] <- frrf[[i]]$Sigma.E
+}
+
+
+# p.PAR =====
+
+p.E <- rep(0, length(frrf))
+
+for (i in 1:length(frrf)) {
+  p.E[[i]] <- frrf[[i]]$P.E
+}
+
+# NSV.PAR =====
+
+NSV.E <- rep(0, length(frrf))
+
+for (i in 1:length(frrf)) {
+  NSV.E[[i]] <- frrf[[i]]$NSV.E
+}
+
+# NPQ.PAR =====
+
+NPQ.E <- rep(0, length(frrf))
+
+for (i in 1:length(frrf)) {
+  NPQ.E[[i]] <- frrf[[i]]$NPQ.E
+}
+```
+
+# Match.sheet values
+
+Extracting data from the Match.sheet. This can look different experiment to experiment- you need to make sure that this code corresponds to the data you have on the match sheet. It will also need to be updated in the final chunks building the final data frames.
+
+```{r Match.sheet.data}
+
+# Culture.ID #####
+
+Culture.ID.vector<-rep("a",length(frrf))
+
+for (i in 1:length(frrf)) {
+  Culture.ID.vector[[i]]<-
+    as.character(frrf[[i]]$Label$Culture.Id)
+}
+
+
+
+# Datetime #####
+
+Time.vector<-rep("a",length(frrf))
+
+for (i in 1:length(frrf)) {
+  Time.vector[[i]]<-
+    as.character(frrf[[i]]$Label$Match.time)
+}
+
+# Cells #####
+
+Cells.vector<-rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  Cells.vector[[i]] <- as.numeric(frrf[[i]]$Label$Cells)
+}
+
+# Chla extract #####
+
+Chla_extract.vector<-rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  Chla_extract.vector[i]<-as.numeric(frrf[[i]]$Label$mol.chorophyll.a)
+}
+
+# Qy #####
+
+Qy.aqua.vector<-rep("a",length(frrf))
+
+# for (i in 1:length(frrf)) {
+#   Qy.aqua.vector[[i]] <- as.numeric(frrf[[i]]$Label$Qy)
+# }
+
+# PAR #####
+
+PAR.vector <- rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  PAR.vector[i] <- as.numeric(frrf[[i]]$Label$PAR)
+}
+
+# Replicate #####
+
+replicate.vector <- rep("a", length(frrf))
+
+# for (i in 1:length(frrf)) {
+#   replicate.vector[[i]] <- frrf[[i]]$Label$Replicate
+# }
+
+# notes #####
+
+notes.vector <- rep("a", length(frrf)) 
+
+# for (i in 1:length(frrf)) {
+#   notes.vector[[i]] <- frrf[[i]]$Label$Notes
+# }
+
+# Intensity #####
+
+intensity.vector <- rep("a", length(frrf)) 
+
+for (i in 1:length(frrf)) {
+  intensity.vector[[i]] <- frrf[[i]]$Label$Intensity
+}
+
+# Condition #####
+
+condition.vector <- rep("a", length(frrf)) 
+
+for (i in 1:length(frrf)) {
+  condition.vector[[i]] <- frrf[[i]]$Label$Condition
+}
+
+# Iron #####
+
+iron.vector <- rep("a", length(frrf)) 
+
+for (i in 1:length(frrf)) {
+  iron.vector[[i]] <- frrf[[i]]$Label$Iron
+}
+
+```
+
+# 'Advanced' Code
+
+## Skip to the end if you only want 'basic' photophys data.
+
+This code is to calculate more parameters based on the frrf data.
+
+### Calculate [RCII]
+
+```{r RCII}
+
+for (j in 1:length(frrf)) {
+  #calculates RCII/ mol 
+  frrf[[j]]$RCII[1]<-((frrf[[j]]$A$Fo[2]/
+                      (frrf[[j]]$A$Sigma[2]*(10^-18))*11800/1000000))/
+    (6.022e23)
+  #(10^-18...) converts nm^2 to m^2 and avocados # gets it into mols 
+  #estimates N- reaction centers
+  
+  frrf[[j]]$n[1]<-
+    (frrf[[j]]$RCII[1]/frrf[[j]]$Label$Cells/1000000)/(frrf[[j]]$Label$mol.chorophyll.a/2)
+  ##DIVIDING BY 1000000 HERE IS FOR CUBIC M CONVERSTION? check that out 
+  #diving by 2- PSII / PSI thing ratio 
+  
+}
+
+# n vector #####
+
+n.vector<-rep(1,length(frrf))
+
+for (i in 1:length(frrf)) {
+  n.vector[[i]]<-frrf[[i]]$n
+}
+
+# n is RCII:Chla ratio !
+
+ratio.vector<-cbind(Culture.ID.vector,n.vector)
+
+ratio.vector
+```
+
+'n' is the RCII:Chla ratio!
+
+### Electron : Carbon conversion
+
+```{r e_C}
+carbon.conversion.factor<-rep(1,length(frrf))
+
+for (i in 1:length(frrf)) {
+  carbon.conversion.factor[[i]]<-(486*frrf[[i]]$NSV.E+1854)*(frrf[[i]]$n)
+}
+
+carbon.conversion.factor
+
+```
+
+### Sigma Algorithim
+
+```{r Sigma}
+
+
+for (j in 1:length(frrf) ) {
+  
+
+
+for (i in 1:length(frrf[[j]]$A$E)) {
+  
+
+#Fv/Fm' = (Fm' - F')/Fm', Not used in qp calculation except for Fv/Fm
+  
+  
+frrf[[j]]$A$Fv.Fm_p[i] <- (frrf[[j]]$A$Fm[i] - frrf[[j]]$A$Fo[i])/frrf[[j]]$A$Fm[i] 
+
+}
+
+for (i in 1:length(frrf[[j]]$A$E)) {
+
+  
+  #F0' = Fo/((Fv/Fm) + F0/Fm')
+
+frrf[[j]]$A$Fo_p[i] <- (frrf[[j]]$A$Fo[2]/((frrf[[j]]$A$Fv.Fm_p[2]) +( frrf[[j]]$A$Fo[2]   /  frrf[[j]]$A$Fm[i]    )      ) ) 
+
+#qp = (Fm'-F')/ (Fm' - Fo')
+
+
+frrf[[j]]$A$qp[i] <-(   (frrf[[j]]$A$Fm[i] - frrf[[j]]$A$Fo[i])      /  (frrf[[j]]$A$Fm[i] - frrf[[j]]$A$Fo_p[i]) ) 
+
+
+#mol electrons per day per RCII
+
+frrf[[j]]$A$ETR.RCII[i] <- (frrf[[j]]$A$qp[i] * frrf[[j]]$A$E[i]* (frrf[[j]]$A$Sigma[i] * 100) *1*0.006022)*86400
+
+#Estimating RCII
+
+frrf[[j]]$RCII[1] <- ((frrf[[j]]$A$Fo[2]/ (frrf[[j]]$A$Sigma[2] * (10^-18))*11800/1000000))/ (6.022e23)
+
+#calculating electron flux: mol electrons m^-3 d^-1
+
+frrf[[j]]$A$production[i] <- frrf[[j]]$A$ETR.RCII[i]* frrf[[j]]$RCII[1]
+
+#Converting electron flux to pmol C cell^-1 d^-1
+
+#converts cubic m^3 to ml
+
+frrf[[j]]$A$production[i] <- frrf[[j]]$A$production[i]/1000000
+
+#converts to pmol
+
+frrf[[j]]$A$production[i] <- frrf[[j]]$A$production[i]*10^12
+
+#converts electrons to carbon 
+
+frrf[[j]]$A$production[i] <- frrf[[j]]$A$production[i]/carbon.conversion.factor[[j]]
+
+#adjusts to approximate cell concentration 
+
+frrf[[j]]$A$production[i] <- frrf[[j]]$A$production[i]/frrf[[j]]$Label$Cells
+
+
+
+frrf[[j]]$A$production[i] <- frrf[[j]]$A$production[i]
+
+
+}}
+```
+
+# Platt 1980 Model
+
+Call the function for the model
+
+```{r}
+# JR JVPII
+
+model.Platt1980 = function(alpha, beta, Ps, E) {
+  Ps * (1 - exp(-1 * alpha * E / Ps)) * exp(-beta * E / Ps)
+}
+
+
+ssr = function(alpha, beta, Ps, E, JVPII) {
+  predicted = model.Platt1980(alpha = alpha, beta = beta, Ps = Ps, E = E)
+  cost = sum((predicted - JVPII)^2, na.rm = T) ## and remove any NA values!
+  
+  ## Return
+  cost
+}
+
+```
+
+```{r}
+results = data.frame(FRRf = names(frrf), alpha = NA, beta = NA, Ps = NA, cost = NA)
+
+```
+
+#### Computationally heavy part of code following
+
+```{r include= FALSE}
+
+
+for(i in 1:length(frrf)){
+
+
+fit = parameter.search(n = 3, cost = ssr, bounds = data.frame(min = c(0, 0, 0.001), max = c(.03, 0.010, 16)  ), splits = 10, E = frrf[[i]]$A$E , JVPII = frrf[[i]]$A$JVPII  )
+
+resid <- abs(model.Platt1980(fit$min$alpha,fit$min$beta, fit$min$Ps, E = frrf[[i]]$A$E)- frrf[[i]]$A$JVPII) #residual- calc resids
+
+fit = parameter.search(n = 3, cost = ssr, bounds = data.frame(min = c(0, 0, 0.001), max = c(.03, 0.010, 16)  ), splits = 20, E = frrf[[i]]$A$E[-which.max(resid)] , JVPII = frrf[[i]]$A$JVPII[-which.max(resid)]  ) #removing worst point/ resids. finds the max and (-) from dataset. can probs remove if use QR to filter data
+
+  results$alpha[i] = fit$min$alpha
+  results$beta[i] = fit$min$beta
+  results$Ps[i] = fit$min$Ps
+  results$cost[i] = fit$min$cost
+                       
+}
+
+```
+
+#### 
+
+need nomalization to Cells- look at unitn of JVPII and see what unit we get if we / by Cells and see if that's useful at all. if not may have to calculate what we did for RCII:chla, bc it includes Chla.
+
+LOOK AT THE UNITS DOES IT MAKE SENSE
+
+```{r results}
+
+summary(results)
+
+```
+
+Append the Platt results into the FRRf data
+
+```{r platt.results}
+
+
+# PLATT MODEL CONTI. ##########
+
+for (i in 1:length(frrf)) {
+  frrf[[i]]$Fit.data$Platt.Alpha=results$alpha[i]
+  frrf[[i]]$Fit.data$Platt.Beta=results$beta[i]
+  frrf[[i]]$Fit.data$Platt.Ps=results$Ps[i]
+  frrf[[i]]$Fit.data$Platt.Cost=results$cost[i]
+}
+
+```
+
+### Productivity calculation based on model results
+
+Based on JR
+
+```{r Prod}
+
+# prod calc in r #####
+## Using Platt model, based on JR
+
+Prod.vector<-rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  Prod.vector[i]<-frrf[[i]]$Fit.data$Platt.Ps*(exp((frrf[[i]]$Fit.data$Platt.Alpha*-1)*frrf[[i]]$Label$PAR)/frrf[[i]]$Fit.data$Platt.Ps)*(exp((frrf[[i]]$Fit.data$Platt.Beta*-1)*frrf[[i]]$Label$PAR)/frrf[[i]]$Fit.data$Platt.Ps)
+}
+
+```
+
+## Vectors of 'Advanced' data
+
+```{r Advanced.vectors}
+
+
+# electron carbon conversion #####
+
+carbon.conversion.factor<-rep("a",length(frrf))
+
+for (i in 1:length(frrf)) {
+  carbon.conversion.factor[[i]]<-
+    carbon.conversion.factor[[i]]
+}
+
+# RCII #####
+
+RCII.vector<-rep(0,length(frrf))
+
+
+for (i in 1:length(frrf)) {
+  RCII.vector[[i]]<-frrf[[i]]$RCII
+}
+
+# Platt vectors #####
+
+Platt.alpha.vector <- rep(0, nrow(results))#initilizing vectors to store data
+Platt.beta.vector <- rep(0, nrow(results)) 
+Platt.Ps.vector  <- rep(0, nrow(results))
+Platt.Cost.vector <- rep(0, nrow(results))  
+
+
+for(i in 1:length(1:nrow(results))){
+  Platt.alpha.vector[i] <- frrf[[i]]$Fit.data$Platt.Alpha
+  Platt.beta.vector[i] <- frrf[[i]]$Fit.data$Platt.Beta
+  Platt.Ps.vector[i] <- frrf[[i]]$Fit.data$Platt.Ps
+  Platt.Cost.vector[i] <- frrf[[i]]$Fit.data$Platt.Cost
+}
+
+Results.data.frame <- as.data.frame(cbind( as.character(results$FRRf),Platt.alpha.vector,Platt.beta.vector,  Platt.Ps.vector, Platt.Cost.vector)) #combining the new vectors into one dataframe 
+
+
+Results.data.frame
+
+```
+
+# Final dataframe!
+
+Woah! We made it to the end!
+
+Run the following chunk if you only ran the FRRf phys code and Ek calculations. Then, skip to the last two chunks :)
+
+```{r Basic.fin}
+
+
+# Make final frame! #####
+
+file.matching.data.frame <- as.data.frame(cbind(File.vector,
+                                              
+                                                Pm = Pm.vector,
+                                                Fv.Fm = Fv.Fm.vector,
+                                                Fv.Fm.Ek = fvfm.Ek,
+                                                Chla.frrf = Chla.frrf.vector,
+                                             
+                                                Ek = Ek.vector,
+                                                p = p.vector,
+                                              
+                                                fo = Fo.vector,
+                                                fm = fm.vector,
+                                             
+                                                NSV = NSV.vector,
+                                                NSV.Ek = NSV.Ek,
+                                           
+                                                Sigma = sigma.vector,
+                                                Sigma.Ek = sigma.Ek,
+                                      
+                                                Alpha = alpha.vector,
+                                                Connectivity = C.vector,
+                                              
+                                                Tau = tau.vector,
+                                                Tau.Ek = tau.Ek
+                                                ))
+
+```
+
+Run this chunk if you had a match.sheet but only ran the FRRf phys code
+
+```{r Basic.fin_B}
+
+
+# Make final frame! #####
+
+file.matching.data.frame <- as.data.frame(cbind(File.vector,
+                                                Culture.ID = Culture.ID.vector,
+                                                Replicate = replicate.vector,
+                                                # 
+                                                # Condition = condition.vector,
+                                                # Intensity = intensity.vector,
+                                                # Iron = iron.vector,
+                                                
+                                                Time = Time.vector,
+                                                PAR = PAR.vector,
+                                                QR = QR.vector,
+                                                Pm = Pm.vector,
+                                                Fv.Fm = Fv.Fm.vector,
+                                                Fv.Fm.Ek = fvfm.Ek,
+                                                Fv.Fm.E = fvfm.E,
+                                                Ek = Ek.vector,
+                                                p = p.vector,
+                                                # Chla_extract = Chla_extract.vector,
+                                                Chla.frrf = Chla.frrf.vector,
+                                                fo = Fo.vector,
+                                                fm = fm.vector,
+                                                # Cells = Cells.vector,
+                                                NSV = NSV.vector,
+                                                NSV.Ek = NSV.Ek,
+                                                NSV.E = NSV.E,
+                                                Sigma = sigma.vector,
+                                                Sigma.Ek = sigma.Ek,
+                                                Sigma.E = sigma.E,
+                                                Alpha = alpha.vector,
+                                                Connectivity = C.vector,
+                                                
+                                                Tau = tau.vector,
+                                                Tau.Ek = tau.Ek,
+                                                Tau.E = tau.E
+                                                ))
+
+```
+
+Run this chunk if you also ran the "Advanced" data code!
+
+```{r Advanced.fin}
+
+
+# Make final frame! #####
+
+file.matching.data.frame <- as.data.frame(cbind(File.vector,
+                                                Culture.ID = Culture.ID.vector,
+                                                Replicate = replicate.vector,
+                                                Time = Time.vector,
+                                                Condition = condition.vector,
+                                                Intensity = intensity.vector,
+                                                Iron = iron.vector,
+                                                PAR = PAR.vector,
+                                                E = E.check.vector,
+                                                QR = QR.vector,
+                                                Pm = Pm.vector,
+                                                Fv.Fm = Fv.Fm.vector,
+                                                Fv.Fm.Ek = fvfm.Ek,
+                                                Fv.Fm.E = fvfm.E,
+                                                Ek = Ek.vector,
+                                                p = p.vector,
+                                                Chla_extract = Chla_extract.vector,
+                                                Chla.frrf = Chla.frrf.vector,
+                                                Qy = Qy.aqua.vector,
+                                                Cells = Cells.vector,
+                                                fo = Fo.vector,
+                                                fm = fm.vector,
+                                                Cells = Cells.vector,
+                                                NSV = NSV.vector,
+                                                NSV.Ek = NSV.Ek,
+                                                NSV.E = NSV.E,
+                                                Sigma = sigma.vector,
+                                                Sigma.Ek = sigma.Ek,
+                                                Sigma.E = sigma.E,
+                                                Alpha = alpha.vector,
+                                                Connectivity = C.vector,
+                                                JVPIIm = JVPIIm,
+                                                
+                                                Tau = tau.vector,
+                                                Tau.Ek = tau.Ek,
+                                                Tau.E = tau.E,
+                                                Prod_sigma = prod_sigma,
+                                                RCII = RCII.vector,
+                                                carbon.conversion.factor = carbon.conversion.factor,
+                                                Platt.alpha = Platt.alpha.vector,
+                                                Platt.beta = Platt.beta.vector,
+                                                Platt.Ps = Platt.Ps.vector,
+                                                Plat.cost = Platt.Cost.vector
+                                                # productivity = Prod.vector
+                                                ))
+
+```
+
+If you did NOT run any 'Advanced' code, run this chunk:
+
+```{r df.fin}
+
+Final.data.file <- file.matching.data.frame
+
+```
+
+If you DID run advanced code, run this chunk:
+
+```{r df.fin_B}
+
+Final.data.file<-cbind(file.matching.data.frame,Results.data.frame)
+
+```
+
+### Export final .csv file
+
+ensure you have the correct file path! The very last item in the path is your desired file name.csv
+
+```{r}
+
+write.csv(Final.data.file,
+          "C:/Users/mlb72/OneDrive/Documents/Rice/Lab/diurnal_paper/Diurnal_Data/Fcyl_diurnal_diel_C_.csv")
+
+
+```
