@@ -1,0 +1,146 @@
+## Code for extracting the photophys data from FRRf files
+## Can be adjusted/ updated for any other parameters you want 
+## I'm sure there's a cleaner way to do this but I do it with a ton of loops lol 
+## We extract values from LED A, but LED's B, C, and D are available. 
+
+# E #####
+
+E.check.vector <- rep(0, length(frrf)) #light intensity! Make sure that at step 2, where we are pulling out the rest of the data, PAR is actually zero. 
+
+for (i in 1:length(frrf)) {
+  E.check.vector[[i]] <- frrf[[i]]$A$E[2]
+}
+
+# Fv.Fm #####
+
+Fv.Fm.vector <-rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  Fv.Fm.vector[i]<- frrf[[i]]$A$Fv.Fm[2]
+}
+
+# Sigma #####
+
+sigma.vector<-rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  sigma.vector[i]<-frrf[[i]]$A$Sigma[2]
+}
+
+# Tau #####
+
+tau.vector<-rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  tau.vector[i]<-frrf[[i]]$A$TauES[2]
+}
+
+# Ek #####
+
+Ek.vector<-rep(0,length(frrf)) 
+
+for (i in 1:length(frrf)) {
+  Ek.vector[i]<-frrf[[i]]$S$Ek[1]
+}
+
+# Alpha #####
+
+alpha.vector<-rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  alpha.vector[i]<-frrf[[i]]$S$Alpha[1]
+}
+
+# NSV #####
+
+NSV.vector<-rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  NSV.vector[i]<-frrf[[i]]$A$NSV[2]
+}
+
+# NPQ #####
+
+NPQ.vector<-rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  NPQ.vector[i]<-frrf[[i]]$A$NPQ[2]
+}
+
+# Chla #####
+
+Chla.frrf.vector<-rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  Chla.frrf.vector[i] <- frrf[[i]]$A$Chl[2]
+}
+
+# Pm #####
+Pm.vector<-rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  Pm.vector[[i]] <- frrf[[i]]$S$Pm[1]
+}
+
+
+
+# Fm #####
+
+fm.vector<-rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  fm.vector[[i]]<-frrf[[i]]$A$Fm[2]
+}
+
+# Fo #####
+
+Fo.vector<-rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  Fo.vector[i]<-frrf[[i]]$A$Fo[2]
+}
+
+# p #####
+
+p.vector<-rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  p.vector[i]<-frrf[[i]]$A$p[2]
+}
+
+# C #####
+
+C.vector<-rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  C.vector[i]<-frrf[[i]]$A$C[2]
+}
+
+# File #####
+
+File.vector<-rep(0,length(frrf)) #The frrf file name- another check to make sure the correct frrf file was matched in the match.sheet
+
+for (i in 1:length(frrf)) 
+{ File.vector[i]<-frrf[[i]]$File 
+  }
+
+# QR #####
+
+QR.vector <- rep("a", length(frrf)) 
+
+for (i in 1:length(frrf)) {
+  QR.vector[[i]] <- frrf[[i]]$A$QR[2]
+}
+
+
+# JVPIIm #####
+
+JVPIIm <- rep(0, length(frrf))
+
+for (i in 1:length(frrf)) {
+  JVPIIm[i] <- max(frrf[[i]]$A$JVPII)
+}
+
+
+print(E.check.vector) # confirm that you have extracted values in the dark 
+
