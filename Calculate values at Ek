@@ -1,0 +1,234 @@
+## Calculate values at Ek
+
+# Step 1: Calculate slopes between each point #####
+
+# Fv/Fm #####
+
+for (j in 1:length(frrf)) {
+  for (i in 1:16) {
+    frrf[[j]]$fvfm.slopes[i] <- ((frrf[[j]]$A$Fv.Fm[i + 1] - frrf[[j]]$A$Fv.Fm[i]) / (frrf[[j]]$A$E[i + 1] - frrf[[j]]$A$E[i]))
+  }
+}
+
+# Tau #####
+
+for (j in 1:length(frrf)) {
+  for (i in 1:16) {
+    frrf[[j]]$Tau.slopes[i] <- ((frrf[[j]]$A$TauES[i + 1] - frrf[[j]]$A$TauES[i]) / (frrf[[j]]$A$E[i + 1] - frrf[[j]]$A$E[i]))
+  }
+}
+
+# Sigma ######
+
+for (j in 1:length(frrf)) {
+  for (i in 1:16) {
+    frrf[[j]]$Sigma.slopes[i] <- ((frrf[[j]]$A$Sigma[i + 1] - frrf[[j]]$A$Sigma[i]) / (frrf[[j]]$A$E[i + 1] - frrf[[j]]$A$E[i]))
+  }
+}
+
+
+# p #####
+
+for (j in 1:length(frrf)) {
+  for (i in 1:16) {
+    frrf[[j]]$P.slopes[i] <- ((frrf[[j]]$A$p[i + 1] - frrf[[j]]$A$p[i]) / (frrf[[j]]$A$E[i + 1] - frrf[[j]]$A$E[i]))
+  }
+}
+
+# NPQ #####
+
+for (j in 1:length(frrf)) {
+  for (i in 1:16) {
+    frrf[[j]]$NPQ.slopes[i] <- ((frrf[[j]]$A$NPQ[i + 1] - frrf[[j]]$A$NPQ[i]) / (frrf[[j]]$A$E[i + 1] - frrf[[j]]$A$E[i]))
+  }
+}
+
+# NSV #####
+
+for (j in 1:length(frrf)) {
+  for (i in 1:16) {
+    frrf[[j]]$NSV.slopes[i] <- ((frrf[[j]]$A$NSV[i + 1] - frrf[[j]]$A$NSV[i]) / (frrf[[j]]$A$E[i + 1] - frrf[[j]]$A$E[i]))
+  }
+}
+
+# Step 2: Calculate values at Ek #####
+## This can be updated for other parameters as needed
+
+# Fv.Fm #####
+
+for (i in 1:length(frrf)) {
+  Evector <- frrf[[i]]$A$E # vector of E in frrf
+  Ek <- frrf[[i]]$S$Ek[1] # Ek value 
+  I.higher <- which(Evector > Ek) # where is E higher than the Ek?
+  I.lower <- which(Evector <= Ek) # where is E lower than or equal to Ek?
+  Higher.bound <- min(I.higher) # what is the minimum E of where E is higher than Ek?
+  Lower.bound <- max(I.lower) # what is the max E of where E is lower than Ek?
+  lowest.E <- frrf[[i]]$A$E[Lower.bound] # The max value of where E is lower than Ek
+  fv.fm.intercept <- frrf[[i]]$A$Fv.Fm[Lower.bound] # Fv.Fm associated with the max value of where E is lower than Ek
+  slope <- frrf[[i]]$fvfm.slopes[Lower.bound] # Slope where the max value of E is lower than Ek 
+  frrf[[i]]$Fv.Fm.Ek <- as.numeric(slope * (Ek - lowest.E) +
+                                     fv.fm.intercept) # equation to find the Fv.Fm at the file Ek value
+}
+
+# Tau #####
+
+for (i in 1:length(frrf)) {
+  Evector <- frrf[[i]]$A$E
+  Ek <- frrf[[i]]$S$Ek[1]
+  I.higher <- which(Evector > Ek)
+  I.lower <- which(Evector <= Ek)
+  Higher.bound <- min(I.higher)
+  Lower.bound <- max(I.lower)
+  lowest.E <- frrf[[i]]$A$E[Lower.bound]
+  Tau.intercept <- frrf[[i]]$A$TauES[Lower.bound]
+  slope <- frrf[[i]]$Tau.slopes[Lower.bound]
+  frrf[[i]]$Tau.Ek <- as.numeric(slope * (Ek - lowest.E) +
+                                    Tau.intercept)
+}
+
+# Sigma #####
+
+for (i in 1:length(frrf)) {
+  Evector <- frrf[[i]]$A$E
+  Ek <- frrf[[i]]$S$Ek[1]
+  I.higher <- which(Evector > Ek)
+  I.lower <- which(Evector <= Ek)
+  Higher.bound <- min(I.higher)
+  Lower.bound <- max(I.lower)
+  lowest.E <- frrf[[i]]$A$E[Lower.bound]
+  Sigma.intercept <- frrf[[i]]$A$Sigma[Lower.bound]
+  slope <- frrf[[i]]$Sigma.slopes[Lower.bound]
+  frrf[[i]]$Sigma.Ek <- as.numeric(slope * (Ek - lowest.E) +
+                                    Sigma.intercept)
+}
+
+# p #####
+
+for (i in 1:length(frrf)) {
+  Evector <- frrf[[i]]$A$E
+  Ek <- frrf[[i]]$S$Ek[1]
+  I.higher <- which(Evector > Ek)
+  I.lower <- which(Evector <= Ek)
+  Higher.bound <- min(I.higher)
+  Lower.bound <- max(I.lower)
+  lowest.E <- frrf[[i]]$A$E[Lower.bound]
+  p.intercept <- frrf[[i]]$A$p[Lower.bound]
+  slope <- frrf[[i]]$P.slopes[Lower.bound]
+  frrf[[i]]$p.ek <- as.numeric(slope * (Ek - lowest.E) +
+                                    p.intercept)
+}
+
+# NSV #####
+
+for (i in 1:length(frrf)) {
+  Evector <- frrf[[i]]$A$E
+  Ek <- frrf[[i]]$S$Ek[1]
+  I.higher <- which(Evector > Ek)
+  I.lower <- which(Evector <= Ek)
+  Higher.bound <- min(I.higher)
+  Lower.bound <- max(I.lower)
+  lowest.E <- frrf[[i]]$A$E[Lower.bound]
+  NSV.intercept <- frrf[[i]]$A$NSV[Lower.bound]
+  slope <- frrf[[i]]$NSV.slopes[Lower.bound]
+  frrf[[i]]$NSV.Ek <- as.numeric(slope * (Ek - lowest.E) +
+                                   NSV.intercept)
+}
+
+
+# NPQ #####
+
+for (i in 1:length(frrf)) {
+  Evector <- frrf[[i]]$A$E
+  Ek <- frrf[[i]]$S$Ek[1]
+  I.higher <- which(Evector > Ek)
+  I.lower <- which(Evector <= Ek)
+  Higher.bound <- min(I.higher)
+  Lower.bound <- max(I.lower)
+  lowest.E <- frrf[[i]]$A$E[Lower.bound]
+  NPQ.intercept <- frrf[[i]]$A$NPQ[Lower.bound]
+  slope <- frrf[[i]]$NPQ.slopes[Lower.bound]
+  frrf[[i]]$NPQ.Ek <- as.numeric(slope * (Ek - lowest.E) +
+                                   NPQ.intercept)
+}
+
+
+# Step 3: Extract calculated values into vectors #####
+
+
+# Values at Ek #####
+
+## Fv.Fm =====
+
+fvfm.Ek <- rep(0,length(frrf))
+
+for (i in 1:length(frrf)) {
+  fvfm.Ek[[i]] <- frrf[[i]]$Fv.Fm.Ek
+}
+
+## Tau.Ek =====
+
+tau.Ek <- rep(0, length(frrf))
+
+for (i in 1:length(frrf)) {
+  tau.Ek[[i]] <- frrf[[i]]$Tau.Ek
+}
+
+## Sigma.Ek =====
+
+sigma.Ek <- rep(0, length(frrf))
+
+for (i in 1:length(frrf)) {
+  sigma.Ek[[i]] <- frrf[[i]]$Sigma.Ek
+}
+
+## Ek.Ek =====
+
+Ek.ek <- rep(0, length(frrf))
+
+# for (i in 1:length(frrf)) {
+#   Ek.Ek[[i]] <- frrf[[i]]$Ek.Ek
+# }
+
+## Alpha.Ek =====
+
+alpha.Ek <- rep(0, length(frrf))
+
+# for (i in 1:length(frrf)) {
+#   alpha.Ek[[i]] <- frrf[[i]]$Akpha.Ek
+# }
+
+## Tau.Ek =====
+
+# tau.Ek <- rep(0, length(frrf))
+# 
+# for (i in 1:length(frrf)) {
+#   tau.Ek[[i]] <- frrf[[i]]$Tau.Ek
+# }
+
+## p.Ek =====
+
+p.Ek <- rep(0, length(frrf))
+
+# for (i in 1:length(frrf)) {
+#   p.Ek[[i]] <- frrf[[i]]$p.Ek
+# }
+
+## NSV.Ek =====
+
+NSV.Ek <- rep(0, length(frrf))
+
+for (i in 1:length(frrf)) {
+  NSV.Ek[[i]] <- frrf[[i]]$NSV.Ek
+}
+
+## NPQ.Ek =====
+
+NPQ.Ek <- rep(0, length(frrf))
+
+for (i in 1:length(frrf)) {
+  NPQ.Ek[[i]] <- frrf[[i]]$NPQ.Ek
+}
+
+
+
+
