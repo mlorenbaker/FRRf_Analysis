@@ -1,0 +1,976 @@
+---
+title: "Platt1980 Model Opt"
+author: "MLB"
+date: "2024-08-01"
+output: html_document
+---
+
+# Load FRRf files
+
+## Step 1: Load in TBK's TheSource Functions for FRRf data files
+
+```{r}
+
+## Functions for analyzing FRRF Output
+##
+## Author: Thomas Bryce Kelly (tkelly@alaska.edu)
+## http://about.tkelly.org/
+##
+## College of Fisheries and Ocean Sciences
+## University of Alaska Fairbanks
+##
+## Dept of Earth, Ocean & Atmospheric Sciences
+## Florida State University
+
+
+
+#' @title Load FRRF Datafiles
+#' @author Thomas Bryce Kelly
+#' @param input.dir the input directory
+#' @param files.names the name of the file in the input directory (default will load all files in that directory)
+#' @export
+load.frrf = function(input.dir, file.names = NULL, verbose = T) {
+    if (is.null(file.names)) {
+        if (verbose) { message('No files provided, attempting to load all files in target directory.')}
+        file.names = list.files(input.dir, pattern = '*.csv')
+    }
+
+    if (verbose) { message('Preparing to load ', length(file.names), ' files.')}
+    result = list()
+
+    for (file.name in file.names) {
+
+        if (verbose) { message('Loading ', paste0(input.dir, file.name), appendLF = F)}
+
+        con = file(paste0(input.dir, file.name), "r")
+
+        col.names = c('Saq', 'E', 'Start', 's', 'Chl', 'ADC', 'rP.obs', 'rP.fit', 'JPII', 'JVPII', 'Fo', 'Fm', 'Fv.Fm',
+                      'C', 'p', 'RSigma', 'Sigma', 'CSQ', 'TauES', 'NPQ', 'NSV', 'QR', 'Qo', 'Qm', 'Qo.SE', 'Qm.SE',
+                      'Q.SE', 'Q.SE.ratio', 'Qo.points', 'Qo.slope', 'Qo.int', 'Qm.points', 'Qm.slope', 'Qm.int')
+
+        data.a = data.frame(Saq = NA, E = NA, Start = NA, s = NA, Chl = NA, ADC = NA,
+                            rP.obs = NA, rP.fit = NA, JPII = NA, JVPII = NA, Fo = NA,
+                            Fm = NA, Fv.Fm = NA, C = NA, p = NA, RSigma = NA, Sigma = NA, CSQ = NA,
+                            TauES = NA, NPQ = NA, NSV = NA, QR = NA, Qo = NA, Qm = NA,
+                            Qo.SE = NA, Qm.SE = NA, Q.SE = NA, Q.SE.ratio = NA, Qo.points = NA,
+                            Qo.slope = NA, Qo.int = NA, Qm.points = NA, Qm.slope = NA, QM.int = NA)
+
+        data.b = data.a
+        data.c = data.a
+        data.d = data.a
+
+        data.s = data.frame(LED = c('A','B','C','D'), Alpha = NA, Ek = NA, Pm = NA, Em = NA, AlphaW = NA, SErP = NA,
+                            nPSII = NA, RCII = NA, stringsAsFactors = FALSE)
+
+        parms = data.frame(Ka = NA, Chl.multiplier = NA, QR.threshold = NA, C.derivation = NA, Tau.PQ = NA, Tau.SQ = NA)
+        suppressWarnings({
+            while (TRUE) {
+                ## Load file line by line
+                line = readLines(con, n = 1)
+                if (length(line) == 0) {
+                    break
+                }
+                line = strsplit(line, split = ',')[[1]]
+
+                if (length(line) > 1) {
+                    ## Check for PARAM values
+                    if (line[1] == 'FRRf3 Ka:') {
+                        parms$Ka = as.numeric(line[2])
+                    }
+                    else if (line[1] == '[Chl] multiplier:') {
+                        parms$Chl.multiplier = as.numeric(line[2])
+                    }
+                    else if (line[1] == 'QR threshold:') {
+                        parms$QR.threshold = line[2]
+                    }
+                    else if (line[1] == 'C derivation:') {
+                        parms$C.derivation = line[2]
+                    }
+                    else if (line[1] == 'TauPQ:') {
+                        parms$Tau.PQ = as.numeric(line[2])
+                    }
+                    else if (line[1] == 'TauSQ:') {
+                        parms$Tau.SQ = as.numeric(line[2])
+                    }
+
+
+                    else if (line[1] == 'Alpha:') {
+                        data.s$Alpha = as.numeric(line[2:5])
+                    }
+                    else if (line[1] == 'Ek:') {
+                        data.s$Ek = as.numeric(line[2:5])
+                    }
+                    else if (line[1] == 'Pm:') {
+                        data.s$Pm = as.numeric(line[2:5])
+                    }
+                    else if (line[1] == 'Em:') {
+                        data.s$Em = as.numeric(line[2:5])
+                    }
+                    else if (line[1] == 'AlphaW:') {
+                        data.s$AlphaW = as.numeric(line[2:5])
+                    }
+                    else if (line[1] == 'SErP:') {
+                        data.s$SErP = as.numeric(line[2:5])
+                    }
+
+                    ## Data A Values
+                    else if (length(line) > 1 & line[2] == 'LED combination A (450 nm alone)') {
+                        line = readLines(con, n = 1) ## Next line
+                        while (TRUE) {
+                            line = readLines(con, n = 1) ## Next line
+                            if (length(line) == 0) {
+                                break
+                            }
+                            line = as.numeric(strsplit(line, split = ',')[[1]])
+
+                            if (is.na(line[2])) {
+                                break
+                            }
+                            if (line[2] > 0 & line[2] < 25) {
+                                data.a[line[2],] = line[c(2:22,24:30,32:37)]
+                            }
+
+                        }
+                    }
+
+                    ## Data B Values
+                    else if (length(line) > 1 & line[2] == 'LED combination B (450 + 530 nm)') {
+                        line = readLines(con, n = 1) ## Next line
+                        while (TRUE) {
+                            line = readLines(con, n = 1) ## Next line
+                            if (length(line) == 0) {
+                                break
+                            }
+                            line = as.numeric(strsplit(line, split = ',')[[1]])
+
+                            if (is.na(line[2])) {
+                                break
+                            }
+                            if (length(line) > 1 & line[2] > 0 & line[2] < 25) {
+                                data.b[line[2],] = line[c(2:22,24:30,32:37)]
+                            }
+
+                        }
+                    }
+
+                    ## Data C Values
+                    else if (length(line) > 1 & line[2] == 'LED combination C (450 + 624 nm)') {
+                        line = readLines(con, n = 1) ## Next line
+                        while (TRUE) {
+                            line = readLines(con, n = 1) ## Next line
+                            if (length(line) == 0) {
+                                break
+                            }
+                            line = as.numeric(strsplit(line, split = ',')[[1]])
+
+                            if (is.na(line[2])) {
+                                break
+                            }
+                            if (line[2] > 0 & line[2] < 25) {
+                                data.c[line[2],] = line[c(2:22,24:30,32:37)]
+                            }
+
+                        }
+                    }
+
+                    ## Data D Values
+                    else if (length(line) > 1 & line[2] == 'LED combination D (450 + 530 + 624 nm)') {
+                        line = readLines(con, n = 1) ## Next line
+                        while (TRUE) {
+                            line = readLines(con, n = 1) ## Next line
+                            if (length(line) == 0) {
+                                break
+                            }
+                            line = as.numeric(strsplit(line, split = ',')[[1]])
+
+                            if (length(line) > 1 & is.na(line[2])) {
+                                break
+                            }
+                            if (length(line) > 1 & line[2] > 0 & line[2] < 25) {
+                                data.d[line[2],] = line[c(2:22,24:30,32:37)]
+                            }
+
+                        }
+                    }
+
+                }
+            }
+            if (verbose) { message('... Success.')}
+        })
+
+        close(con)
+
+        ## Generate Datetime stamp:
+
+        datetime = tryCatch(
+            {
+                year = substr(file.name, 1, 4)
+                month = substr(file.name, 5, 6)
+                day = substr(file.name, 7, 8)
+                hour = substr(file.name, 10, 11)
+                minute = substr(file.name, 12, 13)
+                second = substr(file.name, 14, 15)
+
+                as.POSIXct(paste0(year, '-', month, '-', day, ' ', hour, ':', minute, ':', second), tz = 'UTC')
+            },
+            error = function(c) {
+                NA
+            }
+        )
+        if (!is.na(datetime)) {
+        result[[paste0('Y', year, month, day, hour, minute, second)]] = list(Params = parms, S = data.s,
+                                                                             A = data.a, B = data.b, C = data.c, D = data.d,
+                                                                             Datetime = datetime, File = paste0(file.name))
+        } else {
+            result[[file.name]] = list(Params = parms, S = data.s,
+                                                                                 A = data.a, B = data.b, C = data.c, D = data.d,
+                                                                                 Datetime = datetime, File = paste0(file.name))
+        }
+    }
+
+    result$meta = list(
+        # Source.version = packageVersion('TheSource'),
+        R.version = R.version.string
+    )
+    ## Return
+    result
+}
+
+
+#' @title Webb 1974 Light Curve
+#' @param alpha the initial slope of the P vs E curve
+#' @param Ek a light saturation parameter
+#' @param E the photosynthetically active radiation
+#' @export
+model.Webb1974 = function(alpha, Ek, E) {
+    alpha * Ek * (1 - exp(-E/Ek))
+}
+
+
+#' @title Platt 1980 Light Curve
+#' @export
+#' @inheritParams model.Webb1974
+model.Platt1980 = function(alpha, beta, Ps, E) {
+    Ps * (1 - exp(-1 * alpha * E / Ps)) * exp(-beta * E / Ps)
+}
+
+
+#' @title Jassby 1976 Light Model
+#' @export
+#' @inheritParams model.Webb1974
+model.Jassby1976 = function(alpha, Ek, E) {
+    alpha * Ek * tanh(E / Ek)
+}
+
+
+#' @title Eilers 1988 Light Model
+#' @export
+#' @inheritParams model.Webb1974
+model.Eilers1988 = function(alpha, Eopt, Pm, E) {
+    a = 1 / (alpha * Eopt^2)
+    b = 1 / Pm - 2 / (alpha * Eopt)
+    c = 1/ alpha
+
+    E / (a * E^2 + b * E + c)
+} #there is a beta term in here - the w term. inhibition term stuff
+# w = b/sqrt(a*c). in teh results section, plug abc into equation to calc w?
+
+#' @title Which Closest Time
+#' @description  Find the indicies of the closest times for each entry of x
+#' @export
+which.closest.time = function(x, y) {
+  if (length(y) > 1) {
+    l = rep(NA, length(x))
+    for (i in 1:length(x)) {
+      l[i] = which.min(as.numeric(difftime(x[i], y, units='mins'))^2)
+    }
+  } else {
+    l = which.min(as.numeric(difftime(x, y, units='mins'))^2)
+  }
+  l
+}
+
+#' @title Parameter Search
+#' @author Thomas Bryce Kelly
+#' @description Implements a recursive grid search routine to solve optimization problems in arbitrary dimensions.
+#' @param n Number of recursions to perform
+#' @param cost The cost function which must return a numeric value and accept parameter values as the first arguments and in the order they are provided.
+#' @param ... Optional argument that is passed directly onto the cost function
+#' @param bounds A dataframe containing the minimum and maximum values permitted of each parameter
+#' @param splits The number of subdivisions to perform for each dimension (so grid size is n x splits ^ dimensionality)
+#' @param progression The size of the new search-space to interrogate. A value between 1 and splits/2. Default value (NULL) will yeield a progression of max(1, splits/4), good for most problems.
+#' @export
+parameter.search = function(n, cost, grid = NULL, bounds, splits = 10, progression = NULL, verbose = T, ...) {
+
+  if (verbose){
+    message('Starting Parameter Search')
+    message('Parameter search is an iterative grid search algorithm that seeks the parameters that minimize\nan objective cost function given a set of parameter bounds.')
+  }
+
+  ## Init Timer
+  a = Sys.time()
+
+  if (splits <= 2) { stop('splits argument must be an integer greater than or equal to 3!')}
+  if(is.null(progression)) {
+    progression = max(1, ceiling(splits / 4))
+    if (verbose) { message(' No Progresssion given, default to:\t', progression) }
+  }
+
+  splits = round(splits)
+  if (verbose) {message(' Number of splits set to:\t\t', splits)}
+  ## How many dimensions
+  dim = nrow(bounds)
+
+  ## Setup search grid
+  b = list()
+  for (i in 1:nrow(bounds)) {
+    if (bounds[i,1] == bounds[i,2]) {
+      b[[i]] = bounds[i,1]
+    } else {
+      b[[i]] = seq(bounds[i,1], bounds[i,2], length.out = splits)
+    }
+  }
+  argnames = formalArgs(cost)
+  argnames = argnames[!argnames %in% names(list(...))] # don't include arguments passed through elipsis
+
+  if (is.null(grid)) {
+    grid = do.call('expand.grid', b)
+    colnames(grid) = formalArgs(cost)[1:dim]
+  }
+  grid$cost = NA
+
+  if (verbose) {
+    message(' Mimimum bounds provided for ', paste(colnames(grid)[-ncol(grid)], collapse = ', '), ' are: ',
+            paste(bounds[,1], collapse = ', '))
+    message(' Maximum bounds provided for ', paste(colnames(grid)[-ncol(grid)], collapse = ', '), ' are: ',
+            paste(bounds[,2], collapse = ', '))
+  }
+
+  ## Calculate cost function at each grid location
+  best = Inf
+  for (i in 1:nrow(grid)) {
+    args = as.list(grid[i, 1:dim])
+    names(args) = argnames[1:length(args)]
+    args = c(args, list(...))
+
+    #if (length(args) > length(formalArgs(cost))) { stop('Number of function arguments exceeds what function is expecting.') }
+    grid$cost[i] = do.call(cost, args) # cost(grid[i, 1:dim])
+    if (verbose & grid$cost[i] < best) {
+      message(Sys.time(), ': New optimal parameter set found for n = ', n,': ', paste(grid[i,], collapse = ', '))
+      best = grid$cost[i]
+    }
+  }
+
+  ## Best grid location
+  l = which.min(grid$cost)
+  if (n == 1) {
+    res = list(min = grid[l,], bounds = bounds, grid = grid, history = grid[l,], full.grid = grid)
+  } else{
+
+    ## Setup new bounding box
+    loci = grid[l, 1:dim]
+    bounds.new = data.frame(min = as.numeric(loci), max = as.numeric(loci))
+    for (i in 1:dim) {
+      bounds.new$min[i] = max(bounds$min[i], bounds.new$min[i] - progression * (bounds$max[i] - bounds$min[i]) / splits)
+      bounds.new$max[i] = min(bounds$max[i], bounds.new$max[i] + progression * (bounds$max[i] - bounds$min[i]) / splits)
+    }
+
+    ## Call parameter.search recursively
+    res = parameter.search(n-1, cost, ..., bounds = bounds.new, splits = splits, progression = progression, verbose = F)
+    res$history = rbind(res$history, grid[l,])
+    res$full.grid = rbind(res$full.grid, grid)
+  }
+  ## Return
+  res
+}
+
+```
+
+## Step 2: Load FRRf files
+
+Update for your wd and folder name
+
+```{r}
+
+setwd("C:/Users/mlb72/OneDrive/Documents")
+
+frrf.files = list.files('fcyl diel frrf')
+
+frrf = load.frrf(input.dir = 'fcyl diel frrf/', file.names = frrf.files)
+```
+
+## Step 3: Remove metadata file
+
+Only run this 1x or you will keep removing files
+
+```{r}
+# must remove TK's stamp file
+
+length(frrf) #check length of loaded files
+
+frrf<-frrf[1:(length(frrf)-1)] 
+
+length(frrf)
+```
+
+# Load Match.sheet
+
+```{r}
+# Match time file
+
+setwd("C:/Users/mlb72/OneDrive/Documents")
+
+Fcyl.match<-read.csv('Fcyl_24hr_Diel_Match.sheet.csv')
+
+
+Fcyl.match$Match.time<-as.POSIXct(as.character(Fcyl.match$Match.time))
+
+print(Fcyl.match$Match.time)
+```
+
+## Step 2: File Matching
+
+This matches files based on an exact match File.name column in the match.sheet.
+
+If you want a which.closest.time matching code, let me know!
+
+```{r}
+
+for (i in seq_along(frrf)) {
+  filename <- frrf[[i]]$File[1]
+  rows <- Fcyl.match[Fcyl.match$File.name == filename, -1]
+  frrf[[i]]$Label <- bind_rows(frrf[[i]]$Label, rows)
+}
+```
+
+# Plot JVPII vs E
+
+Visualize initial data
+
+```{r}
+plot_list <- list()
+
+for (i in 1:length(frrf)) {
+  E <- frrf[[i]]$A$E[1:11] # adjust to # of light steps
+  JVPII <- frrf[[i]]$A$JVPII[1:11]
+  Acc <- frrf[[i]]$Label$Culture.Id
+  
+  df <- rbind(data.frame(E, JVPII))
+  
+  p <- ggplot(df, aes(E, JVPII))+
+    geom_point()+
+    labs(title = Acc)+
+    theme_minimal()
+  
+  plot_list[[i]] <- p
+}
+
+plot_list
+```
+
+# Calculate!
+
+## Step 1: Alpha
+
+First, must extract first 4 JVPII points
+
+Can be updated if you want fewer or more.
+
+```{r}
+
+JVPII_line <- list()
+
+for (i in 1:length(frrf)) {
+  file <- frrf[[i]]$File[1]
+  jvpii <- frrf[[i]]$A$JVPII[1:4]
+  Ek <- frrf[[i]]$S$Ek[1]
+  E <- frrf[[i]]$A$E[1:4]
+  
+  JVPII_line[[i]] <- rbind(data.frame(file, E, jvpii,Ek))
+  
+}
+```
+
+## Calculate Alpha
+
+Using the first 4 JVPII points and a simple linear model
+
+```{r}
+
+alpha_list <- list() # empty list to store data
+
+for (i in 1:length(JVPII_line)) {
+  # df <- JVPII_line[[i]]
+  JVPII <- JVPII_line[[i]]$jvpii[1:4] # JVPII
+  E <- JVPII_line[[i]]$E[1:4] # E
+  Ek <- JVPII_line[[i]]$Ek[1] # extracting Ek now
+  file <- JVPII_line[[i]]$file # File name to bind back later
+  
+  mod <- lm(JVPII ~ E)
+  
+  alpha <- coef(mod)[2] #extract slope as alpha
+  
+  alpha_list[[i]] <- rbind(data.frame(file, JVPII, E, Ek, alpha))
+
+}
+```
+
+## Calculate Pmax
+
+Using the calculated Alpha and FRRf Ek
+
+```{r}
+
+pmax_list <- list()
+
+for (i in seq_along(alpha_list)) {
+  Ek <- alpha_list[[i]]$Ek[1]
+  Alpha <- alpha_list[[i]]$alpha[1]
+  File <- alpha_list[[i]]$file
+  
+  Pmax <- Alpha * Ek # equation 
+  
+  pmax_list[[i]] <- rbind(data.frame(File, Ek, Alpha, Pmax))
+}
+```
+
+# Bind data back together
+
+want to toss the data back into the FRRf files to keep organized
+
+## Step 1: Extract vectors of calculated data
+
+```{r}
+
+## Extract data into vectors =====
+
+Alpha <- rep(0, length(pmax_list))
+
+for (i in 1:length(pmax_list)) {
+  Alpha[[i]] <- pmax_list[[i]]$Alpha[1]
+}
+
+Pmax <- rep(0, length(pmax_list))
+
+for (i in 1:length(pmax_list)) {
+  Pmax[[i]] <- pmax_list[[i]]$Pmax[1]
+}
+
+File <- rep("a", length(pmax_list))
+
+for (i in 1:length(pmax_list)) {
+  File[[i]] <- pmax_list[[i]]$File[1]
+}
+
+
+## Bind calculated =====
+
+calc.values <- rbind(data.frame(File, Alpha,
+                                Pmax))
+```
+
+## Step 2: Append back into FRRf files
+
+NOTE: This code uses the exact file names to match
+
+```{r}
+for (i in seq_along(frrf)) {
+  filename <- frrf[[i]]$File[1]
+  rows <- calc.values[calc.values$File == filename, -1]
+  frrf[[i]]$Calculated <- bind_rows(frrf[[i]]$Calculated, rows)
+}
+```
+
+# Plot
+
+NOTE: This code uses the Culture.Id identifer from the match.sheet. Can be updated for file name or time
+
+Acc \<- frrf[[i]]\$File or frrf[[i]]\$Datetime
+
+```{r}
+all_list <- list()
+
+for (i in 1:length(frrf)) {
+  # frf <- frrf[[i]]
+  E <- frrf[[i]]$A$E[1:12]
+  JVPII <- frrf[[i]]$A$JVPII[1:12]
+  Ek <- frrf[[i]]$S$Ek[1]
+  Alpha <- frrf[[i]]$Calculated$Alpha
+  Pmax <- frrf[[i]]$Calculated$Pmax
+  Acc <- frrf[[i]]$Label$Culture.Id
+  
+  df <- rbind(data.frame(E, JVPII, Ek, Alpha, Pmax))
+  
+  p <- ggplot(df, aes(E, JVPII))+
+    geom_point()+
+    geom_vline(xintercept = Ek, linetype = "dashed", col = "cornflowerblue")+
+    geom_hline(yintercept = Pmax, linetype = "dashed", col = "tomato")+
+    geom_abline(intercept = 0, slope = Alpha, linetype = "dashed", col = "slateblue2")+
+    theme_minimal()+
+    annotate("text", x = 30, y = 0, label = paste0(Alpha), col = "slateblue2")+
+    annotate("text", x = 100, y = 0.2, label = paste0(Ek), col = "cornflowerblue")+
+    annotate("text", x = 200, y = 0.25, label = paste0(Pmax), col = "tomato")+
+    labs(title = Acc)
+  
+  all_list[[i]] <- p
+}
+
+all_list
+```
+
+# Model!
+
+## Step 1: Separate your acclimation if needed!
+
+This code is written specifically for subsetting specific acclimations. The new list of data is 'filtered_list[[i]]'. If you do NOT subset, you will need to update the following code from filtered_list[[i]] back to frrf[[i]]
+
+```{r}
+
+
+# Specify the Culture.ID you want to extract
+target_culture_id <- "Fcyl-D-HL-100" # update this based on acclimation name
+
+# Create an empty list to store the filtered items
+filtered_list <- list()
+
+# Loop through the original list and filter based on the target Culture.ID
+for (i in seq_along(frrf)) {
+  item <- frrf[[i]]
+  # Print the current item's Culture.IDs
+  print(paste("Item", i, "Culture.IDs:", toString(item$Label$Culture.Id)))
+  if (target_culture_id %in% item$Label$Culture.Id) {
+    filtered_list <- append(filtered_list, list(item))
+  }
+}
+```
+
+## Step 2: Summarize your calculated model parameters
+
+From your specific filtered list
+
+```{r}
+# Extract data #####
+
+## Alpha =====
+
+alpha <- rep(0, length(filtered_list)) 
+
+for (i in 1:length(filtered_list)) {
+  alpha[[i]] <- filtered_list[[i]]$Calculated$Alpha
+}
+
+## Pmax =====
+
+pmax <- rep(0, length(filtered_list))
+
+for (i in 1:length(filtered_list)) {
+  pmax[[i]] <- filtered_list[[i]]$Calculated$Pmax
+}
+
+## File (again) ======
+
+File <- rep("a", length(filtered_list)) 
+
+for (i in 1:length(filtered_list)) {
+  File[[i]] <- filtered_list[[i]]$File
+}
+
+# Bind together #####
+
+data <- rbind(data.frame(File, alpha, pmax))
+
+```
+
+## Step 3: Summarize data
+
+## Step 4: calculate 15%
+
+```{r}
+
+alpha.vector <- rep(0, length(filtered_list))
+
+pmax.vector <- rep(0, length(filtered_list))
+
+culture.id.vector <- rep("a", length(filtered_list))
+
+for (i in 1:length(filtered_list)) {
+  alpha.vector[i] <- filtered_list[[i]]$Calculated$Alpha
+}
+
+for (i in 1:length(filtered_list)) {
+  pmax.vector[i] <- filtered_list[[i]]$Calculated$Pmax
+}
+
+# for (i in 1:length(filtered_list)) {
+#   culture.id.vector[i] <- filtered_list[[i]]$Calculated$culture.id.vector
+# }
+
+alpha.max <- max(alpha.vector)
+a.max <- (alpha.max * 0.15) + alpha.max
+
+alpha.min <- min(alpha.vector)
+a.min <- alpha.min - (alpha.min * 0.15)
+
+pmax.max <- max(pmax.vector)
+p.max <- (pmax.max *0.15) + pmax.max
+
+pmax.min <- min(pmax.vector)
+p.min<- pmax.min- (pmax.min * 0.15)
+
+# Print #####
+
+print(a.min) # minimum alpha
+print(a.max) # max alpha
+print(p.min) #min pmax
+print(p.max) # max pmax
+
+
+```
+
+# Model Platt1980
+
+## Define model
+
+This is updated from TBK and JR... it is now super long
+
+```{r}
+
+# Adjust model to fit within bounds and ignore outliers
+model.Platt1980 = function(alpha, beta, Ps, E) {
+  Ps * (1 - exp(-1 * alpha * E / Ps)) * exp(-beta * E / Ps)
+} # base model 
+
+ssr = function(alpha, beta, Ps, E, JVPII) {
+  predicted = model.Platt1980(alpha = alpha, beta = beta, Ps = Ps, E = E)
+  cost = sum((predicted - JVPII)^2, na.rm = TRUE) 
+  return(cost)
+} # sum of squares function 
+
+parameter.search = function(n, cost, grid = NULL, bounds, splits = 10, progression = NULL, verbose = TRUE, ...) {
+  if (verbose){
+    message('Starting Parameter Search')
+    message('Parameter search is an iterative grid search algorithm that seeks the parameters that minimize\nan objective cost function given a set of parameter bounds.')
+  }
+  
+  a = Sys.time()
+  if (splits <= 2) stop('splits argument must be an integer greater than or equal to 3!')
+  if(is.null(progression)) {
+    progression = max(1, ceiling(splits / 4))
+    if (verbose) message('No Progression given, default to:\t', progression)
+  }
+  
+  splits = round(splits)
+  if (verbose) message('Number of splits set to:\t\t', splits)
+  
+  dim = nrow(bounds)
+  b = list()
+  for (i in 1:nrow(bounds)) {
+    if (bounds[i,1] == bounds[i,2]) {
+      b[[i]] = bounds[i,1]
+    } else {
+      b[[i]] = seq(bounds[i,1], bounds[i,2], length.out = splits)
+    }
+  }
+  
+  argnames = formalArgs(cost)
+  argnames = argnames[!argnames %in% names(list(...))]
+  
+  if (is.null(grid)) {
+    grid = do.call('expand.grid', b)
+    colnames(grid) = formalArgs(cost)[1:dim]
+  }
+  
+  grid$cost = NA
+  best = Inf
+  
+  for (i in 1:nrow(grid)) {
+    args = as.list(grid[i, 1:dim])
+    names(args) = argnames[1:length(args)]
+    args = c(args, list(...))
+    grid$cost[i] = do.call(cost, args)
+    
+    if (verbose & grid$cost[i] < best) {
+      message(Sys.time(), ': New optimal parameter set found for n = ', n,': ', paste(grid[i,], collapse = ', '))
+      best = grid$cost[i]
+    }
+  }
+  
+  l = which.min(grid$cost)
+  if (n == 1) {
+    res = list(min = grid[l,], bounds = bounds, grid = grid, history = grid[l,], full.grid = grid)
+  } else {
+    loci = grid[l, 1:dim]
+    bounds.new = data.frame(min = as.numeric(loci), max = as.numeric(loci))
+    for (i in 1:dim) {
+      bounds.new$min[i] = max(bounds$min[i], bounds.new$min[i] - progression * (bounds$max[i] - bounds$min[i]) / splits)
+      bounds.new$max[i] = min(bounds$max[i], bounds.new$max[i] + progression * (bounds$max[i] - bounds$min[i]) / splits)
+    }
+    
+    res = parameter.search(n-1, cost, ..., bounds = bounds.new, splits = splits, progression = progression, verbose = FALSE)
+    res$history = rbind(res$history, grid[l,])
+    res$full.grid = rbind(res$full.grid, grid)
+  }
+  
+  return(res)
+}
+
+```
+
+## Empty dataframe
+
+Must have somewhere for the model to store data
+
+```{r}
+results <- data.frame(filename = character(length(filtered_list)),
+                      alpha = numeric(length(filtered_list)),
+                      beta = numeric(length(filtered_list)),
+                      Ps = numeric(length(filtered_list)),
+                      cost = numeric(length(filtered_list)),
+                      stringsAsFactors = FALSE)
+
+```
+
+# Model!
+
+This is computationally heavy. To reduce the load, you can reduce the splits, but it will not fit as well.
+
+NOTE: In the bounds, your calculated a.min/p.min/a.max/p.max values have been put in
+
+```{r include = FALSE}
+for (i in 1:length(filtered_list)) {
+  
+  # Extract the filename from the filtered_list list (assuming filenames are stored in a named element or can be inferred)
+  filename <- filtered_list[[i]]$File  # Adjust this line if filenames are stored differently
+  
+  # Perform the first parameter search
+  fit <- parameter.search(n = 3, cost = ssr, 
+                          bounds = data.frame(min = c(a.min, 0, p.min), max = c(a.max, 0.05, p.max)), 
+                          splits = 10, E = filtered_list[[i]]$A$E, JVPII = filtered_list[[i]]$A$JVPII)
+  
+  # Check if multiple rows exist in fit$min and handle accordingly
+  if (nrow(fit$min) > 1) {
+    message("Multiple optimal solutions found. Selecting the first one.")
+    fit$min <- fit$min[1, ]
+  }
+  
+  resid <- abs(model.Platt1980(fit$min$alpha, fit$min$beta, fit$min$Ps, E = filtered_list[[i]]$A$E) - filtered_list[[i]]$A$JVPII)
+  
+  # Refit the model after removing the worst outlier
+  outlier_index <- which.max(resid)
+  
+  fit <- parameter.search(n = 3, cost = ssr, 
+                          bounds = data.frame(min = c(a.min, 0, p.min), max = c(a.max, 0.05, p.max)), 
+                          splits = 20, E = filtered_list[[i]]$A$E[-outlier_index], JVPII = filtered_list[[i]]$A$JVPII[-outlier_index])
+  
+  # Ensure fit$min is reduced to one row before assigning
+  if (nrow(fit$min) > 1) {
+    message("Multiple optimal solutions found after outlier removal. Selecting the first one.")
+    fit$min <- fit$min[1, ]
+  }
+  
+  # Store the results in the data frame
+  results$filename[i] <- filename
+  results$alpha[i] <- fit$min$alpha
+  results$beta[i] <- fit$min$beta
+  results$Ps[i] <- fit$min$Ps
+  results$cost[i] <- fit$min$cost
+}
+
+```
+
+## Sum results
+
+```{r}
+
+print(results)
+
+```
+
+### Append results into frrf data
+
+Put's back into the filtered list
+
+```{r}
+for (i in seq_along(filtered_list)) {
+  Filename <- filtered_list[[i]]$File[1]
+  rows <- results[results$filename == Filename, -1]
+  filtered_list[[i]]$Model <- bind_rows(filtered_list[[i]]$Model, rows)
+}
+```
+
+# Plot model fits with data
+
+Note: This uses the match.sheet Culture.Id to label. Can be adjusted to something else
+
+Ex: ID \<- filtered_list[[i]]\$File or \$Datetime
+
+```{r}
+
+plot_list <- list()
+
+for (i in 1:length(filtered_list)) {
+  # Extract the best-fit parameters for the i-th dataset
+  alpha <- filtered_list[[i]]$Model$alpha
+  beta <- filtered_list[[i]]$Model$beta
+  Ps <- filtered_list[[i]]$Model$Ps
+  file <- filtered_list[[i]]$File
+  ID <- filtered_list[[i]]$Label$Culture.Id
+  
+  # Get the observed data
+  observed_E <- filtered_list[[i]]$A$E
+  observed_JVPII <- filtered_list[[i]]$A$JVPII
+  
+  # Compute the model predictions
+  predicted_JVPII <- model.Platt1980(alpha, beta, Ps, observed_E)
+  
+  # Combine observed data and predictions into a data frame
+  plot_data <- data.frame(E = observed_E,
+                          Observed_JVPII = observed_JVPII,
+                          Predicted_JVPII = predicted_JVPII,
+                          File = file,
+                          ID = ID)
+  
+  # Plot the observed data and model fit
+  p <- ggplot(plot_data, aes(x = E)) +
+    geom_point(aes(y = Observed_JVPII), color = 'cornflowerblue') +
+    geom_line(aes(y = Predicted_JVPII), color = 'tomato') +
+    labs(title = paste(File),
+         x = "E",
+         y = "JVPII") +
+    theme_minimal()
+  
+  plot_list[[i]] <- p
+}
+
+plot_list
+
+```
+
+## Export
+
+```{r}
+output <- "C:/Users/mlb72/OneDrive/Documents/Rice/Lab/diurnal_paper/Diurnal_Data/Fcyl_DHL100_model_plots/"
+
+for (i in seq_along(plot_list)) {
+  plot_name <- paste0("plot_", i, ".jpg")
+  ggsave(filename = file.path(output, plot_name), plot = plot_list[[i]], device = "jpeg")
+}
+
+```
+
+# Bind back into FRRf
+
+WORK IN PROG HERE
+
+But generally this will use exact file names to bind model data back into your large frrf list
+
+Caution: Running this multiple times may just append "Model" into each file to have multiple rows– so in each file, Model is added, but in files that don't match the filtered_list, the values will be 0. When they are matched, then it'll add another row of the data and keep the zeros. Aka, work in prog
+
+```{r}
+
+for (i in seq_along(frrf)) {
+  Filename <- frrf[[i]]$File[1]
+  rows <- results[results$filename == Filename, -1]
+  frrf[[i]]$Model_results <- bind_rows(frrf[[i]]$Model_results, rows)
+}
+```
